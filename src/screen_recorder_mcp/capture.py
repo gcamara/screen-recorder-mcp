@@ -25,7 +25,12 @@ class AudioMode(str, Enum):
 
 
 class AudioRecorder(Protocol):
-    """Writes a WAV file between start() and stop(); stop() raises if capture failed."""
+    """Writes a WAV file between start() and stop(); stop() raises if capture failed.
+
+    pause()/resume() drop audio (and owe no silence) for the paused span.
+    """
 
     def start(self) -> None: ...
+    def pause(self) -> None: ...
+    def resume(self) -> None: ...
     def stop(self) -> None: ...

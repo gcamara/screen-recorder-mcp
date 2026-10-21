@@ -36,6 +36,14 @@ class MicAudioRecorder:
         )
         self._stream.start()
 
+    def pause(self) -> None:
+        if self._writer is not None:
+            self._writer.pause()
+
+    def resume(self) -> None:
+        if self._writer is not None:
+            self._writer.resume()
+
     def stop(self) -> None:
         if self._stream is not None:
             self._stream.stop()

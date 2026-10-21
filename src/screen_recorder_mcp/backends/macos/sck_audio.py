@@ -53,6 +53,16 @@ class SckAudioRecorder:
         self._stream.start()
         threading.Thread(target=self._fill_silence_until_stopped, daemon=True).start()
 
+    def pause(self) -> None:
+        with self._lock:
+            if self._writer is not None:
+                self._writer.pause()
+
+    def resume(self) -> None:
+        with self._lock:
+            if self._writer is not None:
+                self._writer.resume()
+
     def stop(self) -> None:
         self._silence_stop.set()
         if self._stream is not None:

@@ -49,8 +49,14 @@ class RecordingSession:
         session.start(); ...; output_path = session.stop()
     """
 
-    def __init__(self, plan: RecordingPlan, parts: RecordingParts) -> None:
+    def __init__(
+        self,
+        plan: RecordingPlan,
+        parts: RecordingParts,
+        on_target_closed: Callable[[], None] | None = None,
+    ) -> None:
         self.plan = plan
+        self.on_target_closed = on_target_closed
         self._parts = parts
         self._slot = LatestFrameSlot()
         self._stop_pacing = threading.Event()
@@ -60,7 +66,7 @@ class RecordingSession:
         self.target_closed = threading.Event()
 
     def start(self) -> None:
-        self._parts.frame_source.start(self._slot.put, self.target_closed.set)
+        self._parts.frame_source.start(self._slot.put, self._mark_target_closed)
         if not self._slot.first_frame.wait(_FIRST_FRAME_TIMEOUT_SECONDS):
             self._parts.frame_source.stop()
             raise RuntimeError(
@@ -82,12 +88,41 @@ class RecordingSession:
         self._stop_audio_and_mux()
         return self.plan.output
 
+    def pause(self) -> None:
+        """Freeze video and audio; the paused span appears in neither.
+
+        Example: session.pause(); ...; session.resume()
+        """
+        if self._pacer is None:
+            raise RuntimeError("pause() before start(); expected a running session")
+        self._pacer.pause()
+        if self._parts.audio is not None:
+            self._parts.audio.pause()
+
+    def resume(self) -> None:
+        if self._pacer is None:
+            raise RuntimeError("resume() before start(); expected a running session")
+        self._pacer.resume()
+        if self._parts.audio is not None:
+            self._parts.audio.resume()
+
+    def content_seconds(self) -> float:
+        """Recorded seconds so far: excludes paused spans."""
+        if self._pacer is None:
+            return 0.0
+        return self._pacer.content_seconds(self.started_at)
+
+    def _mark_target_closed(self) -> None:
+        self.target_closed.set()
+        if self.on_target_closed is not None:
+            self.on_target_closed()
+
     def status(self) -> dict[str, object]:
         frames = 0 if self._pacer is None else self._pacer.frames_written
         return {
             "target": self.plan.target.as_dict(),
             "region": None if self.plan.region is None else self.plan.region.as_dict(),
-            "elapsed_seconds": round(time.perf_counter() - self.started_at, 1),
+            "elapsed_seconds": round(self.content_seconds(), 1),
             "frames_written": frames,
             "target_closed": self.target_closed.is_set(),
             "output": str(self.plan.output),

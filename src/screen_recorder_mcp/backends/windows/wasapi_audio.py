@@ -33,6 +33,15 @@ class WasapiAudioRecorder:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._error: Exception | None = None
+        self._writer: AlignedWavWriter | None = None
+
+    def pause(self) -> None:
+        if self._writer is not None:
+            self._writer.pause()
+
+    def resume(self) -> None:
+        if self._writer is not None:
+            self._writer.resume()
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._record_safely, daemon=True)
@@ -68,6 +77,7 @@ class WasapiAudioRecorder:
             frames_per_buffer=_CHUNK_FRAMES,
         )  # fmt: skip
         writer = AlignedWavWriter(self._output, rate, channels)
+        self._writer = writer
         try:
             while not self._stop.is_set():
                 _drain(stream, writer)
