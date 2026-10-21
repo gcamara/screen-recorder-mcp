@@ -21,6 +21,7 @@ dependencies = [
     "pyobjc-framework-Cocoa>=10.3; sys_platform == 'darwin'",
     "pyobjc-framework-libdispatch>=10.3; sys_platform == 'darwin'",
     "sounddevice>=0.5; sys_platform == 'darwin'",
+    "pyside6>=6.12.0",
 ]
 
 [project.urls]
@@ -28,6 +29,7 @@ Repository = "https://github.com/gcamara/screen-recorder-mcp"
 
 [project.scripts]
 screen-recorder-mcp = "screen_recorder_mcp.server:main"
+screen-recorder = "screen_recorder_mcp.ui.app:main"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]
