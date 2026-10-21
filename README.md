@@ -77,10 +77,16 @@ It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
 - **Rectangle**: drag an area of the screen. This is a screen region, so whatever is on top of it is recorded too.
 - **Full screen**: click a monitor.
 
-Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While recording, the toolbar
-has pause, stop, discard and the mic / system-audio toggles; it is hidden from screen captures. After
-stopping, the recording opens in the player: trim the start and end, export a GIF, save, copy or
-open the folder. Past recordings are under the history icon, settings under the gear.
+Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While recording:
+
+- a border frames what is being recorded (it follows the window in Window mode);
+- the recording bar sits at the top of the screen with pause, stop, discard and the mic / system-audio
+  toggles. Drag it anywhere; it remembers the spot. Neither the bar nor the border is ever part of the video.
+
+When you stop, the recording is copied to the clipboard (turn this off in Settings) and opens in the
+player: trim the start and end, export a GIF, save, open the folder, or copy it again as video, GIF or
+file path (also on right-click in the history). **Recent** in the toolbar, and in the tray menu, lists
+the latest recordings; settings are under the gear.
 
 | | |
 |---|---|
@@ -109,7 +115,7 @@ Replace `/path/to/screen-recorder-mcp` with where you cloned it.
 **Claude Code**
 
 ```bash
-claude mcp add screen-recorder --scope user -- uv --directory /path/to/screen-recorder-mcp run screen-recorder-mcp
+claude mcp add screen-recorder --scope user -- uv --directory /path/to/screen-recorder-mcp run --no-sync screen-recorder-mcp
 ```
 
 **Claude Desktop, Cursor and other clients** (`mcpServers` section of the client's config):
@@ -119,13 +125,17 @@ claude mcp add screen-recorder --scope user -- uv --directory /path/to/screen-re
   "mcpServers": {
     "screen-recorder": {
       "command": "uv",
-      "args": ["--directory", "/path/to/screen-recorder-mcp", "run", "screen-recorder-mcp"]
+      "args": ["--directory", "/path/to/screen-recorder-mcp", "run", "--no-sync", "screen-recorder-mcp"]
     }
   }
 }
 ```
 
-Restart the client and the five tools below show up.
+Restart the client and the tools below show up.
+
+`--no-sync` matters on Windows: plain `uv run` re-installs the package when dependencies change, and
+that fails while another client session has the server's `.exe` open. After pulling a new version,
+close your AI clients and run `uv sync` once.
 
 ## Usage
 
