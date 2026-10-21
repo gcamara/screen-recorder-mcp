@@ -91,3 +91,10 @@ class FailingStopFrameSource(FakeFrameSource):
 class FailingAudioRecorder(FakeAudioRecorder):
     def start(self) -> None:
         raise PermissionError("screen recording not granted")
+
+
+class GpuOutOfMemoryFrameSource(FakeFrameSource):
+    """GPU capture that can't create its session, like WGC with VRAM exhausted."""
+
+    def start(self, frame_sink: FrameCallback, closed_sink: ClosedCallback) -> None:
+        raise OSError("DirectX error 0x8007000E: not enough memory")

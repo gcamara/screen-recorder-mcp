@@ -1,13 +1,14 @@
-"""Windows backend: Win32 window listing, Windows Graphics Capture, WASAPI audio."""
+"""Windows backend: Win32 window listing, Windows Graphics Capture (GDI on CPU), WASAPI audio."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from screen_recorder_mcp.backends.windows import win32_api
+from screen_recorder_mcp.backends.windows import gdi_capture, win32_api
 from screen_recorder_mcp.backends.windows.wasapi_audio import WasapiAudioRecorder
 from screen_recorder_mcp.backends.windows.wgc_frame_source import WgcFrameSource
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
+from screen_recorder_mcp.frame_sources import CaptureMode, FallbackFrameSource, PollingFrameSource
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.targets import CaptureTarget
 from screen_recorder_mcp.window_registry import WindowInfo
@@ -53,9 +54,29 @@ class WindowsBackend:
         if target.window_id is not None:
             win32_api.bring_to_front(target.window_id)
 
-    def frame_source(self, target: CaptureTarget, capture_cursor: bool) -> FrameSource:
-        return WgcFrameSource(target.window_id, target.monitor_index, capture_cursor)
+    def frame_source(
+        self, target: CaptureTarget, capture_cursor: bool, mode: CaptureMode
+    ) -> FrameSource:
+        gpu = WgcFrameSource(target.window_id, target.monitor_index, capture_cursor)
+        if mode is CaptureMode.GPU:
+            return gpu
+        cpu = _gdi_frame_source(target)
+        return cpu if mode is CaptureMode.CPU else FallbackFrameSource(gpu, cpu)
 
     def audio_recorder(self, mode: AudioMode, target: CaptureTarget, output: Path) -> AudioRecorder:
         # WASAPI has no per-window loopback here: "system" is every app's sound.
         return WasapiAudioRecorder(mode, output)
+
+
+_CPU_POLL_SECONDS = 1 / 30
+
+
+def _gdi_frame_source(target: CaptureTarget) -> PollingFrameSource:
+    """CPU capture: no cursor, ~30 grabs/s; the pacer still writes the requested fps."""
+    hwnd = target.window_id
+    if hwnd is not None:
+        return PollingFrameSource(
+            lambda: gdi_capture.grab_window(hwnd), lambda: win32_api.is_window(hwnd), _CPU_POLL_SECONDS
+        )
+    rect = target.rect
+    return PollingFrameSource(lambda: gdi_capture.grab_screen_rect(rect), lambda: True, _CPU_POLL_SECONDS)

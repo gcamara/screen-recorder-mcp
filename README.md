@@ -21,13 +21,15 @@ Claude: Saved ~/Videos/screen-recorder-mcp/rec-20261021-153000.mp4 (42 s)
 - Crop: an overlay lets you drag a rectangle over the app to record only that part.
 - Optional audio, off by default: system sound or microphone.
 - Constant frame rate MP4 (H.264), even when the app isn't redrawing.
+- Works without the GPU on Windows: if the GPU can't start a capture session (out of video memory,
+  busy with a render or a game), it falls back to CPU capture on its own. You can also force it.
 - Plain stdio MCP server, so any MCP client can use it (Claude Code, Claude Desktop, Cursor, ...).
 
 ## Platform support
 
 | | Windows 10 2004+ / 11 | macOS 13 Ventura+ |
 |---|---|---|
-| Capture API | Windows Graphics Capture | ScreenCaptureKit |
+| Capture API | Windows Graphics Capture, GDI `PrintWindow` on CPU | ScreenCaptureKit |
 | Window recording, ignores apps in front | yes | yes |
 | `audio="system"` | everything the PC plays | only the recorded app (all apps for a monitor) |
 | `audio="mic"` | default microphone | default microphone |
@@ -109,12 +111,16 @@ records the whole window.
 |---|---|
 | `list_targets()` | Visible windows (front-most first) and monitors (`monitor:1`, `monitor:2`, ...) |
 | `pick_region(target)` | Opens the crop overlay over the target and returns the rectangle you drew (or `null`) |
-| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?)` | Starts recording |
+| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto")` | Starts recording |
 | `recording_status()` | Elapsed time, frames written, whether the target window was closed |
 | `stop_recording()` | Finishes the file and returns its path and size |
 
 `target` accepts a window title or part of it, an app name (`chrome`, `notepad.exe`, `Safari`), a
 `window_id` from `list_targets`, or `monitor:N`.
+
+`capture` picks how frames are read: `"auto"` (GPU, falling back to CPU), `"gpu"`, or `"cpu"`
+(Windows only). Ask for it in plain words, e.g. "record Chrome, use the CPU, my GPU is busy". CPU
+capture doesn't draw the mouse cursor and costs more CPU per frame.
 
 Files are saved to `~/Videos/screen-recorder-mcp/` on Windows and `~/Movies/screen-recorder-mcp/` on
 macOS, unless you pass `output_dir`.
@@ -137,6 +143,8 @@ optional audio ──▶ WAV (silence-padded) ───────────�
 
 - **Per-window capture.** Windows Graphics Capture and ScreenCaptureKit both read the window's own
   surface from the compositor, not the pixels on screen. That's why windows on top don't appear.
+  The CPU path on Windows asks the window to paint itself into a bitmap (`PrintWindow`), which keeps
+  the same guarantee, and stretches windows that aren't DPI-aware the way the desktop shows them.
 - **Constant frame rate.** Both APIs only send a frame when the window changes, so a static window
   would produce a 10-second video only a fraction of a second long. A pacer thread re-sends the
   latest frame on a fixed clock.
@@ -152,6 +160,7 @@ optional audio ──▶ WAV (silence-padded) ───────────�
 ```bash
 uv run pytest -q                                      # unit tests, no desktop needed
 uv run python scripts/verify_recording.py notepad     # real recording on this machine
+uv run python scripts/verify_recording.py notepad --capture=cpu
 ```
 
 `verify_recording.py` records a window while a red window covers it, then checks the result with
@@ -167,7 +176,8 @@ src/screen_recorder_mcp/
   recorder.py          one recording session (capture → pacer → encoder, audio, mux)
   frame_pacer.py       constant-fps pacing
   region_picker.py     crop overlay (runs as a subprocess)
-  backends/windows/    Win32 window list, WGC capture, WASAPI audio
+  frame_sources.py     polling source + GPU→CPU fallback
+  backends/windows/    Win32 window list, WGC capture, GDI CPU capture, WASAPI audio
   backends/macos/      Quartz window list, ScreenCaptureKit capture and app audio
 ```
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol
 
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
+from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.targets import CaptureTarget
 from screen_recorder_mcp.window_registry import WindowLister
@@ -26,7 +27,9 @@ class PlatformBackend(Protocol):
 
     def monitor_rects(self) -> list[Rect]: ...
     def bring_to_front(self, target: CaptureTarget) -> None: ...
-    def frame_source(self, target: CaptureTarget, capture_cursor: bool) -> FrameSource: ...
+    def frame_source(
+        self, target: CaptureTarget, capture_cursor: bool, mode: CaptureMode
+    ) -> FrameSource: ...
     def audio_recorder(
         self, mode: AudioMode, target: CaptureTarget, output: Path
     ) -> AudioRecorder: ...

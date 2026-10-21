@@ -10,6 +10,7 @@ from pathlib import Path
 from screen_recorder_mcp.backends import PlatformBackend
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.encoder import FfmpegEncoder
+from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.muxer import mux_audio
 from screen_recorder_mcp.recorder import RecordingParts, RecordingPlan, RecordingSession
@@ -55,7 +56,11 @@ def plan_recording(
 
 
 def build_session(
-    backend: PlatformBackend, plan: RecordingPlan, audio: AudioMode, capture_cursor: bool
+    backend: PlatformBackend,
+    plan: RecordingPlan,
+    audio: AudioMode,
+    capture_cursor: bool,
+    capture_mode: CaptureMode = CaptureMode.AUTO,
 ) -> RecordingSession:
     ffmpeg = find_ffmpeg()
     log_path = plan.output.with_suffix(".ffmpeg.log")
@@ -63,7 +68,7 @@ def build_session(
     if plan.audio_path is not None:
         audio_recorder = backend.audio_recorder(audio, plan.target, plan.audio_path)
     parts = RecordingParts(
-        frame_source=backend.frame_source(plan.target, capture_cursor),
+        frame_source=backend.frame_source(plan.target, capture_cursor, capture_mode),
         encoder=FfmpegEncoder(ffmpeg, plan.video_only_path, log_path),
         audio=audio_recorder,
         muxer=partial(mux_audio, ffmpeg),

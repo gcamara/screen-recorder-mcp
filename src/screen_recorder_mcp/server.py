@@ -10,6 +10,7 @@ from mcp.server.mcpserver import MCPServer
 
 from screen_recorder_mcp.backends import current_backend
 from screen_recorder_mcp.capture import AudioMode
+from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.recorder import RecordingSession
 from screen_recorder_mcp.region_picker import pick_region_interactively
@@ -25,7 +26,9 @@ Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
    ASK whether they want to crop a portion of that app/screen. If yes, call
    pick_region (the user drags a rectangle on screen) and pass its result as
    `region` to start_recording.
-3. Audio: keep audio="none" unless the user explicitly asked for sound
+3. Capture: keep capture="auto" (GPU, automatic CPU fallback). Use "cpu" when the
+   user says the GPU is busy or asks for CPU recording (Windows only).
+4. Audio: keep audio="none" unless the user explicitly asked for sound
    ("system" = on Windows everything the PC plays, on macOS only the recorded
    app's sound, or every app's for a monitor; "mic" = microphone).
 Window recordings only contain that app: windows moved in front of it are not
@@ -77,19 +80,22 @@ def start_recording(
     audio: str = "none",
     capture_cursor: bool = True,
     output_dir: str | None = None,
+    capture: str = "auto",
 ) -> dict[str, object]:
     """Start recording a window or monitor to MP4 (H.264).
 
     target: window title / process name / window_id, or `monitor:N` (see list_targets).
     region: optional {x, y, width, height} relative to the target, usually from pick_region.
     audio: "none" (default), "system" or "mic" — only when the user asked for audio.
+    capture: "auto" (default: GPU capture, CPU if the GPU can't start), "gpu", or "cpu"
+             (Windows only; no GPU use at all, no cursor in the video).
     """
     if _active:
         raise RuntimeError("a recording is already running; call stop_recording first")
     mode = AudioMode(audio)
     crop = None if region is None else Rect(**region)
     plan = plan_recording(_resolve(target), crop, fps, mode, _output_dir(output_dir))
-    session = build_session(_backend, plan, mode, capture_cursor)
+    session = build_session(_backend, plan, mode, capture_cursor, CaptureMode(capture))
     session.start()
     _active["current"] = session
     return session.status()

@@ -12,6 +12,9 @@ from ctypes import wintypes
 from screen_recorder_mcp.geometry import Rect
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32.GetWindowDpiAwarenessContext.restype = ctypes.c_void_p
+_user32.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+_user32.MonitorFromWindow.restype = ctypes.c_void_p
 _dwmapi = ctypes.WinDLL("dwmapi")
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
@@ -89,6 +92,48 @@ def visible_frame_rect(hwnd: int) -> Rect:
         hwnd, _DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(rect), ctypes.sizeof(rect)
     )
     return Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+
+
+def window_rect(hwnd: int) -> Rect:
+    """Screen rect including the invisible resize border (what PrintWindow paints)."""
+    rect = wintypes.RECT()
+    _user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    return Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+
+
+_MONITOR_DEFAULTTONEAREST = 2
+_MDT_EFFECTIVE_DPI = 0
+_BASE_DPI = 96
+_DPI_UNAWARE = 0
+_DPI_SYSTEM_AWARE = 1
+
+
+def window_content_scale(hwnd: int) -> float:
+    """How much DWM stretches this window's own pixels on screen.
+
+    DPI-unaware (and system-aware on a different-DPI monitor) windows paint at
+    a smaller logical size that DWM bitmap-scales; PrintWindow returns the
+    unscaled paint, so CPU capture must stretch it by this factor.
+    Example: a DPI-unaware window on a 125% monitor -> 1.25
+    """
+    awareness = _user32.GetAwarenessFromDpiAwarenessContext(
+        ctypes.c_void_p(_user32.GetWindowDpiAwarenessContext(wintypes.HWND(hwnd)))
+    )
+    monitor_dpi = _monitor_dpi(hwnd)
+    if awareness == _DPI_UNAWARE:
+        return monitor_dpi / _BASE_DPI
+    if awareness == _DPI_SYSTEM_AWARE:
+        return monitor_dpi / _user32.GetDpiForSystem()
+    return 1.0
+
+
+def _monitor_dpi(hwnd: int) -> int:
+    monitor = _user32.MonitorFromWindow(wintypes.HWND(hwnd), _MONITOR_DEFAULTTONEAREST)
+    dpi_x, dpi_y = wintypes.UINT(), wintypes.UINT()
+    ctypes.windll.shcore.GetDpiForMonitor(
+        ctypes.c_void_p(monitor), _MDT_EFFECTIVE_DPI, ctypes.byref(dpi_x), ctypes.byref(dpi_y)
+    )
+    return dpi_x.value or _BASE_DPI
 
 
 def bring_to_front(hwnd: int) -> None:

@@ -3,7 +3,8 @@
 Records a window for 5 s while a red window covers it, then a 3 s clip with
 audio, and asserts on the results with ffprobe/ffmpeg. Prints PASS/FAIL lines.
 
-Usage: uv run python scripts/verify_recording.py <window query>   (e.g. "TextEdit", "notepad")
+Usage: uv run python scripts/verify_recording.py <window query> [--capture=auto|gpu|cpu]
+       (e.g. "TextEdit", "notepad")
 """
 
 from __future__ import annotations
@@ -19,11 +20,13 @@ import numpy as np
 
 from screen_recorder_mcp.backends import current_backend
 from screen_recorder_mcp.capture import AudioMode
+from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.session_factory import build_session, find_ffmpeg, plan_recording
 from screen_recorder_mcp.targets import CaptureTarget, resolve_target
 
 _RED_COVER_SECONDS = 3000  # ms the red window stays up
+_MODE = "auto"  # overridden by --capture=cpu|gpu
 
 
 def main(query: str) -> int:
@@ -41,7 +44,7 @@ def main(query: str) -> int:
 
 def _record(backend, target: CaptureTarget, out_dir: Path, region, audio, seconds, cover) -> Path:
     plan = plan_recording(target, region, 30, audio, out_dir)
-    session = build_session(backend, plan, audio, True)
+    session = build_session(backend, plan, audio, True, CaptureMode(_MODE))
     session.start()
     cover_process = _open_red_cover(target.rect) if cover else None
     time.sleep(seconds)
@@ -111,4 +114,8 @@ def _expect(name: str, ok: bool, detail: object) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "notepad"))
+    flags = [arg for arg in sys.argv[1:] if arg.startswith("--capture=")]
+    positional = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    if flags:
+        _MODE = flags[0].split("=", 1)[1]
+    sys.exit(main(positional[0] if positional else "notepad"))

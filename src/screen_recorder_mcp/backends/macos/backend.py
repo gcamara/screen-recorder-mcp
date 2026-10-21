@@ -9,6 +9,7 @@ from screen_recorder_mcp.backends.macos.mic_audio import MicAudioRecorder
 from screen_recorder_mcp.backends.macos.sck_audio import SckAudioRecorder
 from screen_recorder_mcp.backends.macos.sck_frame_source import SckFrameSource
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
+from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.targets import CaptureTarget
 
@@ -29,7 +30,13 @@ class MacBackend:
         if target.pid:
             quartz_windows.activate_app(target.pid)
 
-    def frame_source(self, target: CaptureTarget, capture_cursor: bool) -> FrameSource:
+    def frame_source(
+        self, target: CaptureTarget, capture_cursor: bool, mode: CaptureMode
+    ) -> FrameSource:
+        if mode is CaptureMode.CPU:
+            raise NotImplementedError(
+                f"capture={mode.value!r} is Windows-only for now; expected 'auto' or 'gpu' on macOS"
+            )
         if target.window_id is not None:
             return SckFrameSource(target.window_id, None, capture_cursor)
         return SckFrameSource(None, self._display_id(target), capture_cursor)
