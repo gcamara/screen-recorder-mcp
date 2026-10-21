@@ -6,8 +6,8 @@ recording; mic and system-audio toggles; an "AI" badge when the assistant starte
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QVariantAnimation, Qt, Signal
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import QEasingCurve, QPoint, QVariantAnimation, Qt, Signal
+from PySide6.QtGui import QColor, QMouseEvent, QPainter
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QWidget
 
 from screen_recorder_mcp.capture import AudioMode
@@ -59,6 +59,7 @@ class RecordingToolbar(QWidget):
     stop_clicked = Signal()
     cancel_clicked = Signal()
     audio_changed = Signal(object)  # AudioMode
+    moved_by_user = Signal(QPoint)  # top-left after a drag, so the next recording reuses it
 
     def __init__(self, theme: ThemeController, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -68,7 +69,10 @@ class RecordingToolbar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._theme, self._audio = theme, AudioMode.NONE
+        self._drag_offset: QPoint | None = None
         self._build()
+        self.setCursor(Qt.CursorShape.OpenHandCursor)  # buttons keep their own arrow cursor
+        self.setToolTip("Drag to move")
         theme.changed.connect(self._restyle)
         self.apply_status(None)
 
@@ -108,6 +112,7 @@ class RecordingToolbar(QWidget):
         self._mic.clicked.connect(lambda: self._toggle(AudioMode.MIC))
         self._system.clicked.connect(lambda: self._toggle(AudioMode.SYSTEM))
         for widget in (self._start, self._pause, self._resume, self._stop, self._cancel, self._mic, self._system):
+            widget.setCursor(Qt.CursorShape.PointingHandCursor)  # the pill itself shows a grab hand
             row.addWidget(widget)
 
     def audio_mode(self) -> AudioMode:
@@ -150,6 +155,24 @@ class RecordingToolbar(QWidget):
         self._pill.setStyleSheet(
             f'QFrame[role="pill"] {{ background: {palette.surface_overlay}; border: 1px solid {border}; border-radius: 22px; }}'
         )
+
+    # --- dragging: press on the pill's background (buttons consume their own clicks) ---
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._drag_offset = event.globalPosition().toPoint() - self.pos()
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+
+    def mouseReleaseEvent(self, _event: QMouseEvent) -> None:
+        if self._drag_offset is None:
+            return
+        self._drag_offset = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.moved_by_user.emit(self.pos())
 
     def showEvent(self, event: object) -> None:
         super().showEvent(event)  # type: ignore[arg-type]

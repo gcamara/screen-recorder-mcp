@@ -20,7 +20,7 @@ from screen_recorder_mcp.ui.formatting import (
 from screen_recorder_mcp.ui.os_integration import parse_hotkey
 from screen_recorder_mcp.ui.theme import DARK, LIGHT, Palette, build_qss, palette_for
 from screen_recorder_mcp.ui.view_models import (
-    TrimModel, audio_mode_for, build_request, history_row_for, toggle_audio, toolbar_position,
+    TrimModel, audio_mode_for, build_request, history_row_for, toggle_audio, follow_window, pill_home,
     toolbar_should_hide, toolbar_should_show, toolbar_view_for,
 )
 
@@ -117,12 +117,16 @@ def test_trim_model_clamps_handles() -> None:
         TrimModel(duration=0)
 
 
-def test_toolbar_position_stays_outside_target() -> None:
-    screen = Rect(0, 0, 1920, 1080)
-    assert toolbar_position(Rect(100, 100, 800, 500), (420, 48), screen) == (290, 612)
-    below_no_room = toolbar_position(Rect(100, 300, 800, 770), (420, 48), screen)
-    assert below_no_room[1] == 300 - 12 - 48
-    assert toolbar_position(Rect(0, 0, 1920, 1080), (420, 48), screen) == (750, 12)
+def test_pill_home_is_top_centre_of_the_recorded_screen() -> None:
+    assert pill_home(Rect(0, 0, 1920, 1080), (420, 60)) == (750, 12)
+    assert pill_home(Rect(1920, 0, 2560, 1440), (420, 60)) == (1920 + 1070, 12)
+
+
+def test_follow_window_converts_native_movement_to_logical() -> None:
+    area, start = Rect(100, 100, 400, 300), Rect(125, 125, 500, 375)
+    assert follow_window(area, start, Rect(150, 125, 500, 375), 1.25) == Rect(120, 100, 400, 300)
+    assert follow_window(area, start, Rect(125, 125, 625, 375), 1.25) == Rect(100, 100, 500, 300)
+    assert follow_window(area, start, start, 0) == area
 
 
 def test_history_row_marks_ai(tmp_path: Path) -> None:

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, QTimer, Signal
 
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.service import (
@@ -20,7 +20,9 @@ from screen_recorder_mcp.service import (
 )
 from screen_recorder_mcp.ui.countdown_overlay import CountdownOverlay
 from screen_recorder_mcp.ui.file_actions import copy_file_to_clipboard
+from screen_recorder_mcp.ui.os_integration import native_window_rect
 from screen_recorder_mcp.ui.qt_bridge import BackgroundRunner, ServiceEventBridge
+from screen_recorder_mcp.ui.recording_border import RecordingBorder
 from screen_recorder_mcp.ui.recording_toolbar import RecordingToolbar
 from screen_recorder_mcp.ui.selection_session import ScreenInfo, SelectionSession, screens_from_qt
 from screen_recorder_mcp.ui.theme_controller import ThemeController
@@ -29,7 +31,8 @@ from screen_recorder_mcp.ui.view_models import (
     SelectionResult,
     audio_mode_for,
     build_request,
-    toolbar_position,
+    follow_window,
+    pill_home,
     toolbar_should_hide,
     toolbar_should_show,
 )
@@ -56,6 +59,9 @@ class RecordingController(QObject):
         self._screen_rect: Rect | None = None
         self._session: SelectionSession | None = None
         self._pill = RecordingToolbar(theme)
+        self._border = RecordingBorder(theme)
+        self._pill_pos: QPoint | None = None  # where the user last dragged the bar
+        self._follow: tuple[int, Rect, float] | None = None  # window id, native rect at start, dpr
         self._countdown = CountdownOverlay(theme)
         self._poll = QTimer(self)
         self._poll.setInterval(_PILL_POLL_MS)
@@ -69,6 +75,10 @@ class RecordingController(QObject):
         self._pill.pause_clicked.connect(lambda: self._call(self._service.pause))
         self._pill.resume_clicked.connect(lambda: self._call(self._service.resume))
         self._pill.cancel_clicked.connect(lambda: self._call(self._service.cancel))
+        self._pill.moved_by_user.connect(self._remember_pill_pos)
+
+    def _remember_pill_pos(self, pos: QPoint) -> None:
+        self._pill_pos = pos
 
     def _call(self, action: Callable[[], object]) -> None:
         self._runner.submit(action, on_error=lambda e: self.error.emit(str(e)))
@@ -99,9 +109,18 @@ class RecordingController(QObject):
     def _on_selected(self, result: SelectionResult, delay: int) -> None:
         self._drop_session()
         self._area, self._screen_rect = result.area, result.screen
+        self._follow = self._follow_target(result)
         audio = audio_mode_for(self._settings.include_microphone, self._settings.include_system_audio)
         request = build_request(result.target, result.region, self._settings, audio, delay)
         self._runner.submit(lambda: self._service.start(request), on_error=lambda e: self.error.emit(str(e)))
+
+    def _follow_target(self, result: SelectionResult) -> tuple[int, Rect, float] | None:
+        # Window recordings follow the window, so the border must too.
+        if result.mode is not CaptureTargetMode.WINDOW or not result.target.isdigit():
+            return None
+        start = native_window_rect(int(result.target))
+        ratio = next((s.ratio for s in self._screens() if s.logical == result.screen), 1.0)
+        return None if start is None else (int(result.target), start, ratio)
 
     # --- events ----------------------------------------------------------------
     def handle_event(self, event: RecorderEvent) -> None:
@@ -118,12 +137,14 @@ class RecordingController(QObject):
             self._hide_pill(event)
         elif kind in (RecorderEventKind.PAUSED, RecorderEventKind.RESUMED):
             self._pill.apply_status(event.status)
+            self._border.set_paused(kind is RecorderEventKind.PAUSED)
 
     def _show_for(self, status: RecordingStatus) -> None:
         self._pill.set_audio_mode(status.audio)
         self._pill.apply_status(status)
         self._place_pill(status)
         self._pill.show()
+        self._show_border()
         self._poll.start()
         self.active_changed.emit(True)
         self._update_countdown(status)
@@ -135,20 +156,35 @@ class RecordingController(QObject):
         self._countdown.hide()
 
     def _place_pill(self, status: RecordingStatus) -> None:
-        hint = self._pill.sizeHint()
-        size = (hint.width(), hint.height())
-        if status.started_by == "ai" or self._area is None or self._screen_rect is None:
-            # No picked area to avoid: dock bottom-centre, above the taskbar, clear of title bars.
-            screen = self._screens()[0].logical
-            self._pill.move(screen.x + (screen.width - size[0]) // 2, screen.y + screen.height - size[1] - 72)
+        if self._pill_pos is not None:
+            self._pill.move(self._pill_pos)  # the user's spot wins, for every later recording too
             return
-        self._pill.move(*toolbar_position(self._area, size, self._screen_rect))
+        hint = self._pill.sizeHint()
+        use_pick = status.started_by != "ai" and self._screen_rect is not None
+        screen = self._screen_rect if use_pick else self._screens()[0].logical
+        self._pill.move(*pill_home(screen, (hint.width(), hint.height())))  # type: ignore[arg-type]
+
+    def _show_border(self) -> None:
+        if self._area is None:
+            return  # AI recordings: no picked area to frame
+        self._border.set_paused(False)
+        self._border.show_around(self._area)
+
+    def _track_window(self) -> None:
+        if self._follow is None or self._area is None:
+            return
+        window_id, start, ratio = self._follow
+        now = native_window_rect(window_id)
+        if now is not None:
+            self._border.move_to(follow_window(self._area, start, now, ratio))
 
     def _hide_pill(self, event: RecorderEvent) -> None:
         self._poll.stop()
         self._pill.hide()
+        self._border.hide()
         self._countdown.hide()
         self._area = None
+        self._follow = None
         self.active_changed.emit(False)
         if event.kind is RecorderEventKind.FAILED:
             self.error.emit(event.message or "Recording failed")
@@ -174,6 +210,7 @@ class RecordingController(QObject):
 
     def _refresh_pill(self) -> None:
         self._pill.apply_status(self._service.status())
+        self._track_window()
 
     # --- accessors for the shell ----------------------------------------------------
     def pill(self) -> RecordingToolbar:
@@ -191,4 +228,5 @@ class RecordingController(QObject):
     def close(self) -> None:
         self._bridge.close()
         self._pill.hide()
+        self._border.hide()
         self._countdown.hide()

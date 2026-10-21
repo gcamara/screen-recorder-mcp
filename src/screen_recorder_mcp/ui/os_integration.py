@@ -17,6 +17,8 @@ from PySide6.QtCore import QAbstractNativeEventFilter, QObject
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QWidget
 
+from screen_recorder_mcp.geometry import Rect
+
 log = logging.getLogger(__name__)
 
 WDA_EXCLUDEFROMCAPTURE = 0x11
@@ -135,3 +137,29 @@ class GlobalHotkey(QObject):
 
         ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_ID)
         self._registered = False
+
+
+def native_window_rect(window_id: int) -> Rect | None:
+    """Where a window is now, in the OS's desktop units (physical px on Windows, points on macOS).
+
+    Lets the recording border follow a window the user drags while it is being recorded.
+    Returns None when the window is gone or the platform can't tell.
+    Example: native_window_rect(int(target)) -> Rect(384, 250, 877, 540)
+    """
+    try:
+        return _native_window_rect(window_id)
+    except Exception as error:  # noqa: BLE001 - the border just stops following
+        log.warning(json.dumps({"event": "window_rect_failed", "window_id": window_id, "error": repr(error)}))
+        return None
+
+
+def _native_window_rect(window_id: int) -> Rect | None:
+    if sys.platform == "win32":
+        from screen_recorder_mcp.backends.windows import win32_api
+
+        return win32_api.visible_frame_rect(window_id) if win32_api.is_window(window_id) else None
+    if sys.platform == "darwin":
+        from screen_recorder_mcp.backends.macos.quartz_windows import QuartzWindowLister
+
+        return next((w.rect for w in QuartzWindowLister().list_windows() if w.window_id == window_id), None)
+    return None

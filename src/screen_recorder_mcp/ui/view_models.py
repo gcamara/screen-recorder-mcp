@@ -192,22 +192,29 @@ def history_row_for(info: RecordingInfo, now: datetime) -> HistoryRow:
     )
 
 
-def toolbar_position(target: Rect, size: tuple[int, int], screen: Rect, gap: int = 12) -> tuple[int, int]:
-    """Top-left for the pill: centred under the recorded area, else above it, else top of the screen.
+def pill_home(screen: Rect, size: tuple[int, int], margin: int = 12) -> tuple[int, int]:
+    """Snipping Tool's spot for the recording bar: top-centre of the screen being recorded.
 
-    Always outside the target when there is room, so it cannot cover what is being recorded.
-    Example: toolbar_position(Rect(100,100,800,500), (420,48), Rect(0,0,1920,1080)) -> (290, 612)
+    It may sit over the recorded area; that's fine because the bar is excluded from capture.
+    Example: pill_home(Rect(0, 0, 1920, 1080), (420, 60)) -> (750, 12)
     """
-    width, height = size
-    x = target.x + (target.width - width) // 2
-    x = max(screen.x, min(x, screen.x + screen.width - width))
-    below = target.y + target.height + gap
-    if below + height <= screen.y + screen.height:
-        return x, below
-    above = target.y - gap - height
-    if above >= screen.y:
-        return x, above
-    return x, screen.y + gap
+    return screen.x + (screen.width - size[0]) // 2, screen.y + margin
+
+
+def follow_window(area: Rect, native_start: Rect, native_now: Rect, ratio: float) -> Rect:
+    """Move/resize the logical `area` by how the window moved in native units (px / ratio).
+
+    Example: follow_window(Rect(100, 100, 400, 300), Rect(125, 125, 500, 375), Rect(150, 125, 500, 375), 1.25)
+             -> Rect(120, 100, 400, 300)
+    """
+    if ratio <= 0:
+        return area
+    return Rect(
+        area.x + round((native_now.x - native_start.x) / ratio),
+        area.y + round((native_now.y - native_start.y) / ratio),
+        area.width + round((native_now.width - native_start.width) / ratio),
+        area.height + round((native_now.height - native_start.height) / ratio),
+    )
 
 
 @dataclass(frozen=True)

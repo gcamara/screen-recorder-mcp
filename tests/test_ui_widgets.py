@@ -198,3 +198,52 @@ def test_ensure_log_stream_keeps_existing_console(tmp_path) -> None:
     before = sys.stderr
     ensure_log_stream(tmp_path)
     assert sys.stderr is before and not (tmp_path / "app.log").exists()
+
+
+def test_border_frames_area_from_outside(qapp: QApplication, theme: ThemeController) -> None:
+    from screen_recorder_mcp.ui.recording_border import BORDER_WIDTH, RecordingBorder, frame_geometry
+
+    assert frame_geometry(Rect(100, 100, 400, 300), 3) == Rect(97, 97, 406, 306)
+    border = RecordingBorder(theme)
+    border.show_around(Rect(100, 100, 400, 300))
+    geometry = border.geometry()
+    assert (geometry.x(), geometry.width()) == (100 - BORDER_WIDTH, 400 + 2 * BORDER_WIDTH)
+    assert border.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    border.hide()
+
+
+def test_pill_drag_moves_and_reports_position(qapp: QApplication, theme: ThemeController) -> None:
+    pill = RecordingToolbar(theme)
+    pill.move(200, 50)
+    pill.show()
+    reported: list[QPoint] = []
+    pill.moved_by_user.connect(reported.append)
+    QTest.mousePress(pill, Qt.MouseButton.LeftButton, pos=QPoint(4, 4))
+    QTest.mouseMove(pill, QPoint(104, 44))
+    QTest.mouseRelease(pill, Qt.MouseButton.LeftButton, pos=QPoint(104, 44))
+    assert reported and pill.pos() != QPoint(200, 50)
+    pill.hide()
+
+
+def test_controller_puts_pill_top_centre_and_reuses_dragged_spot(
+    qapp: QApplication, theme: ThemeController, tmp_path: Path
+) -> None:
+    service = UiFakeRecorderService(tmp_path, seed_history=False)
+    controller = RecordingController(service, theme, BackgroundRunner(), screens=lambda: [SCREEN])
+    controller._area, controller._screen_rect = Rect(100, 300, 300, 200), SCREEN.logical
+    service.start(RecordingRequest(target="monitor:1"))
+    _pump(qapp)
+    pill = controller.pill()
+    assert pill.y() == SCREEN.logical.y + 12 and abs(pill.x() + pill.width() // 2 - 400) <= 1
+    assert controller._border.isVisible() and controller._border.area() == Rect(100, 300, 300, 200)
+    service.stop()
+    _pump(qapp)
+    assert not controller._border.isVisible()
+    controller._remember_pill_pos(QPoint(30, 400))
+    controller._area = Rect(100, 300, 300, 200)
+    service.start(RecordingRequest(target="monitor:1"))
+    _pump(qapp)
+    assert pill.pos() == QPoint(30, 400)
+    service.stop()
+    _pump(qapp)
+    controller.close()
