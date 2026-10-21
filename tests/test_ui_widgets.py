@@ -176,3 +176,25 @@ def _finish_open_overlay() -> None:
     for widget in QApplication.topLevelWidgets():
         if isinstance(widget, MonitorOverlay) and widget.isVisible():
             widget._finish_rectangle()
+
+
+def test_ensure_log_stream_redirects_missing_stderr(tmp_path, monkeypatch) -> None:
+    import sys
+
+    from screen_recorder_mcp.ui.app import ensure_log_stream
+
+    monkeypatch.setattr(sys, "stderr", None)
+    ensure_log_stream(tmp_path)
+    print("hello", file=sys.stderr)
+    sys.stderr.close()
+    assert (tmp_path / "app.log").read_text(encoding="utf-8").strip() == "hello"
+
+
+def test_ensure_log_stream_keeps_existing_console(tmp_path) -> None:
+    import sys
+
+    from screen_recorder_mcp.ui.app import ensure_log_stream
+
+    before = sys.stderr
+    ensure_log_stream(tmp_path)
+    assert sys.stderr is before and not (tmp_path / "app.log").exists()

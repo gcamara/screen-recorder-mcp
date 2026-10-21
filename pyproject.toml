@@ -29,6 +29,9 @@ Repository = "https://github.com/gcamara/screen-recorder-mcp"
 
 [project.scripts]
 screen-recorder-mcp = "screen_recorder_mcp.server:main"
+
+# GUI entry: on Windows the launcher runs without a console window.
+[project.gui-scripts]
 screen-recorder = "screen_recorder_mcp.ui.app:main"
 
 [build-system]

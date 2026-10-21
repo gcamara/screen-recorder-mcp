@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Protocol
 
+from screen_recorder_mcp.proc import hidden_window_flags
+
 THUMB_WIDTH = 320
 
 FfmpegRun = Callable[[list[str]], int]
@@ -17,7 +19,11 @@ class ThumbnailMaker(Protocol):
 
 
 def _run_ffmpeg(args: list[str]) -> int:
-    return subprocess.run(["ffmpeg", *args], capture_output=True, check=False).returncode
+    # No console flash per thumbnail: the app runs without a console window.
+    completed = subprocess.run(
+        ["ffmpeg", *args], capture_output=True, check=False, creationflags=hidden_window_flags()
+    )
+    return completed.returncode
 
 
 class ThumbnailCache:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
@@ -33,11 +34,25 @@ def build_service(theme: ThemeController, caller: GuiThreadCaller) -> RecorderSe
     return service
 
 
+def ensure_log_stream(log_dir: Path) -> None:
+    """Point stderr at `log_dir/app.log` when the app runs without a console.
+
+    The GUI launcher (pythonw) starts with sys.stderr = None, so logging and
+    uncaught tracebacks would be lost; send them to a file instead.
+    Example: ensure_log_stream(app_data_dir())  # then logging.basicConfig(...)
+    """
+    if sys.stderr is not None:
+        return
+    log_dir.mkdir(parents=True, exist_ok=True)
+    sys.stderr = (log_dir / "app.log").open("a", encoding="utf-8", buffering=1)
+
+
 def main() -> int:
     """Run the desktop app; returns the process exit code.
 
     Example: uv run screen-recorder
     """
+    ensure_log_stream(app_data_dir())
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = QApplication(sys.argv)
     app.setApplicationName("Screen Recorder")
