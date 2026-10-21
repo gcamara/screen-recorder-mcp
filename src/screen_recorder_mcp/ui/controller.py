@@ -43,6 +43,7 @@ class RecordingController(QObject):
     settings_changed = Signal(object)  # RecorderSettings
     active_changed = Signal(bool)  # a recording is in progress (tray: "Stop recording")
     error = Signal(str)
+    notice = Signal(str)  # non-error feedback, e.g. "copied to clipboard"
 
     def __init__(
         self, service: RecorderService, theme: ThemeController, runner: BackgroundRunner,
@@ -80,6 +81,7 @@ class RecordingController(QObject):
         """
         if self._session is not None:
             return
+        mode = CaptureTargetMode(mode)  # tray/hotkey/combo may hand over the plain str value
         self._runner.submit(self._service.list_targets, on_result=lambda t: self._open_session(t, mode, delay_seconds),
                             on_error=lambda e: self.error.emit(f"Could not list targets: {e}"))
 
@@ -157,9 +159,18 @@ class RecordingController(QObject):
 
     def _finish(self, info: RecordingInfo) -> None:
         if self._settings.auto_copy_to_clipboard:
-            copy_file_to_clipboard(info.path)
+            self._auto_copy(info)
         self.history_changed.emit()
         self.recording_finished.emit(info)
+
+    def _auto_copy(self, info: RecordingInfo) -> None:
+        # Snipping Tool behaviour: the finished recording is already on the clipboard.
+        try:
+            copy_file_to_clipboard(info.path)
+        except FileNotFoundError as error:
+            self.error.emit(str(error))
+            return
+        self.notice.emit("Recording copied to clipboard")
 
     def _refresh_pill(self) -> None:
         self._pill.apply_status(self._service.status())

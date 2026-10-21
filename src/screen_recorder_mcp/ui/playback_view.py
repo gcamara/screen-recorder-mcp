@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QToolButton, QVBoxLayout, QWidget
 
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
+from screen_recorder_mcp.ui.clipboard_actions import ClipboardActions
 from screen_recorder_mcp.ui.dialogs import Dialogs
-from screen_recorder_mcp.ui.file_actions import copy_file_to_clipboard, reveal_in_folder, save_copy
+from screen_recorder_mcp.ui.file_actions import reveal_in_folder, save_copy
 from screen_recorder_mcp.ui.formatting import format_clock, format_clock_tenths
 from screen_recorder_mcp.ui.gif_dialog import GifExportDialog
 from screen_recorder_mcp.ui.icons import icon
@@ -34,6 +35,8 @@ class PlaybackView(QWidget):
         self._service, self._theme, self._runner, self._dialogs = service, theme, runner, dialogs
         self._info: RecordingInfo | None = None
         self._trim: TrimModel | None = None
+        self.clipboard = ClipboardActions(service, runner, self)
+        self.clipboard.message.connect(self.message)
         self._player = QMediaPlayer(self)
         self._audio = QAudioOutput(self)
         self._player.setAudioOutput(self._audio)
@@ -113,11 +116,22 @@ class PlaybackView(QWidget):
         self._action_buttons: list[QPushButton] = []
         for glyph, text, slot in spec:
             row.addWidget(self._action_button(glyph, text, slot))
+            if text == "Copy":
+                row.addWidget(self._copy_options_button())
         row.addStretch(1)
         delete = self._action_button("trash", "Delete", self._delete)
         delete.setProperty("role", "danger")
         row.addWidget(delete)
         return row
+
+    def _copy_options_button(self) -> IconButton:
+        # Split-button: "Copy" copies the video in one click, the arrow offers GIF / path.
+        button = IconButton("chevron-down", "More copy options", self._theme, tint="text_muted", size=16)
+        button.setProperty("flat", False)
+        button.setMenu(self.clipboard.build_menu(self._theme, lambda: self._info, button))
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._copy_options = button
+        return button
 
     def _action_button(self, glyph: str, text: str, slot: object) -> QPushButton:
         button = QPushButton(text)
@@ -238,7 +252,7 @@ class PlaybackView(QWidget):
 
     def _copy(self) -> None:
         if self._info is not None:
-            self._guard(lambda: copy_file_to_clipboard(self._info.path), "Copied file to clipboard")  # type: ignore[union-attr]
+            self.clipboard.copy_video(self._info)
 
     def _open_folder(self) -> None:
         if self._info is not None:

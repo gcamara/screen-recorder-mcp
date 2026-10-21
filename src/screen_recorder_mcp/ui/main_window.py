@@ -15,6 +15,7 @@ from screen_recorder_mcp.ui.history_view import HistoryView
 from screen_recorder_mcp.ui.icons import icon, icon_pixmap
 from screen_recorder_mcp.ui.playback_view import PlaybackView
 from screen_recorder_mcp.ui.qt_bridge import BackgroundRunner
+from screen_recorder_mcp.ui.recent_menu import RecentRecordingsMenu
 from screen_recorder_mcp.ui.settings_view import SettingsView
 from screen_recorder_mcp.ui.theme import Palette
 from screen_recorder_mcp.ui.theme_controller import ThemeController
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
         controller.recording_finished.connect(self.show_recording)
         controller.history_changed.connect(self._history.refresh)
         controller.error.connect(self.toast)
+        controller.notice.connect(self.toast)
         self._history.refresh()
         self._show_latest()
 
@@ -94,7 +96,7 @@ class MainWindow(QMainWindow):
         self._home = QStackedWidget()
         self._home.addWidget(self._empty)
         self._home.addWidget(self._playback)
-        self._history = HistoryView(self._service, thumbnails, runner)
+        self._history = HistoryView(self._service, thumbnails, runner, self._playback.clipboard, self._theme)
         self._settings = SettingsView(self._service, dialogs)
         self._settings.load()
         for page in (self._home, self._history, self._settings):
@@ -124,6 +126,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self._new)
         row.addWidget(self._mode)
         row.addWidget(self._delay)
+        row.addWidget(self._recent_button())
         row.addStretch(1)
         self._nav = self._nav_buttons(row)
         row.addWidget(self._more_button())
@@ -136,6 +139,20 @@ class MainWindow(QMainWindow):
         combo.setToolTip("What to record")
         combo.setIconSize(QSize(16, 16))
         return combo
+
+    def _recent_button(self) -> QToolButton:
+        button = QToolButton()
+        button.setText("Recent")
+        button.setToolTip("Latest recordings")
+        button.setIcon(icon("history", self._theme.palette.text_muted, 16))
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.recent_menu = RecentRecordingsMenu(self._service, "Recent", button)
+        self.recent_menu.open_requested.connect(self.show_recording)
+        self.recent_menu.show_all_requested.connect(lambda: self.go_to(PAGE_HISTORY))
+        button.setMenu(self.recent_menu)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        button.setProperty("role", "dropdown")  # same chevron as the mode/delay combos
+        return button
 
     def _nav_buttons(self, row: QHBoxLayout) -> dict[int, IconButton]:
         buttons: dict[int, IconButton] = {}
@@ -164,7 +181,9 @@ class MainWindow(QMainWindow):
 
     # --- behaviour -----------------------------------------------------------------
     def selected_mode(self) -> CaptureTargetMode:
-        return self._mode.currentData()
+        # QComboBox hands a str-based Enum back as a plain str ("window"); the overlays compare
+        # modes with `is`, so without this every pick fell back to the rectangle behaviour.
+        return CaptureTargetMode(self._mode.currentData())
 
     def selected_delay(self) -> int:
         return DELAY_OPTIONS[self._delay.currentIndex()][1]

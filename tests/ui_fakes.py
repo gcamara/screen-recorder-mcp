@@ -52,3 +52,19 @@ class FakeDialogs:
     def confirm(self, title: str, text: str) -> bool:
         self.asked.append(f"confirm:{title}")
         return self._confirm
+
+
+class GifStubRecorderService(UiFakeRecorderService):
+    """export_gif writes a stub file instead of running ffmpeg."""
+
+    def export_gif(self, recording_id: str, high_quality: bool, output: Path | None = None) -> Path:
+        target = output or self._dir / f"{recording_id}.gif"
+        target.write_bytes(b"GIF89a stub")
+        return target
+
+
+class BrokenHistoryRecorderService(UiFakeRecorderService):
+    """history() fails like a remote service that just went away."""
+
+    def history(self, limit: int = 50) -> list[RecordingInfo]:
+        raise RuntimeError("control server unreachable at 127.0.0.1:1")

@@ -114,6 +114,9 @@ QComboBox:hover, QLineEdit:hover, QSpinBox:hover {{ border-color: {p.border_stro
 QComboBox:focus, QLineEdit:focus, QSpinBox:focus {{ border-color: {p.accent_strong}; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox::down-arrow {{ {chevron} width: 14px; height: 14px; }}
+QToolButton[role="dropdown"] {{ padding-right: 26px; }}
+QToolButton[role="dropdown"]::menu-indicator {{ {chevron} width: 14px; height: 14px;
+  subcontrol-origin: padding; subcontrol-position: center right; right: 8px; }}
 QComboBox QAbstractItemView {{ background: {p.surface_overlay}; color: {p.text};
   border: 1px solid {p.border_strong}; selection-background-color: {p.accent_soft};
   selection-color: {p.text}; outline: none; padding: 4px; }}

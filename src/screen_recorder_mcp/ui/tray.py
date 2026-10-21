@@ -53,6 +53,10 @@ class AppTray(QSystemTrayIcon):
         action.triggered.connect(signal)
         return action
 
+    def add_recent_menu(self, menu: QMenu) -> None:
+        """Insert a "Recent recordings" submenu right after "Open"."""
+        self._menu.insertMenu(self._stop, menu)
+
     def set_recording(self, active: bool) -> None:
         self._stop.setVisible(active)
         self._new.setEnabled(not active)

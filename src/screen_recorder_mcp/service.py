@@ -103,7 +103,7 @@ class RecorderSettings:
     include_system_audio: bool = False
     capture_mode: CaptureMode = CaptureMode.AUTO
     capture_cursor: bool = True
-    auto_copy_to_clipboard: bool = False  # copies the file path / file to the clipboard
+    auto_copy_to_clipboard: bool = True  # copies the finished file to the clipboard, like Snipping Tool
     show_toolbar_for_ai_recordings: bool = True
     hotkey: str = "ctrl+shift+r"  # global "new recording" shortcut (cmd+shift+r on macOS)
     theme: Literal["system", "dark", "light"] = "system"

@@ -14,9 +14,10 @@ from PySide6.QtWidgets import QApplication
 from screen_recorder_mcp.service import RecorderService
 from screen_recorder_mcp.ui.controller import RecordingController
 from screen_recorder_mcp.ui.dialogs import Dialogs, QtDialogs
-from screen_recorder_mcp.ui.main_window import MainWindow
+from screen_recorder_mcp.ui.main_window import PAGE_HISTORY, MainWindow
 from screen_recorder_mcp.ui.os_integration import GlobalHotkey
 from screen_recorder_mcp.ui.qt_bridge import BackgroundRunner
+from screen_recorder_mcp.ui.recent_menu import RecentRecordingsMenu
 from screen_recorder_mcp.ui.theme_controller import ThemeController
 from screen_recorder_mcp.ui.thumbnails import ThumbnailCache, ThumbnailMaker
 from screen_recorder_mcp.ui.tray import AppTray, brand_icon
@@ -39,6 +40,8 @@ class AppShell(QObject):
             dialogs or QtDialogs(),
         )
         self.tray = AppTray(self.window)
+        self.tray_recent = RecentRecordingsMenu(service, "Recent recordings")
+        self.tray.add_recent_menu(self.tray_recent)
         self.hotkey = GlobalHotkey(app, self.new_recording) if with_hotkey else None
         self._connect()
         theme.set_theme(service.get_settings().theme)
@@ -53,6 +56,8 @@ class AppShell(QObject):
         tray.stop_requested.connect(controller.stop_recording)
         tray.quit_requested.connect(self.quit)
         controller.active_changed.connect(tray.set_recording)
+        self.tray_recent.open_requested.connect(self._open_recording)
+        self.tray_recent.show_all_requested.connect(self._open_history)
         controller.settings_changed.connect(self._on_settings)
 
     def start(self) -> None:
@@ -68,6 +73,14 @@ class AppShell(QObject):
     def new_recording(self) -> None:
         """Hotkey / tray entry: same as pressing New with the window's current mode and delay."""
         self._begin(self.window.selected_mode(), self.window.selected_delay())
+
+    def _open_recording(self, info: object) -> None:
+        self.show_window()
+        self.window.show_recording(info)  # type: ignore[arg-type]
+
+    def _open_history(self) -> None:
+        self.show_window()
+        self.window.go_to(PAGE_HISTORY)
 
     def show_window(self) -> None:
         self.window.show()
