@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -54,6 +55,9 @@ def main() -> int:
     """
     ensure_log_stream(app_data_dir())
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # Decode playback on the CPU: hardware decoding fails (and retries) when VRAM is full,
+    # and a screen recording at desktop size is cheap to decode in software anyway.
+    os.environ.setdefault("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "")
     app = QApplication(sys.argv)
     app.setApplicationName("Screen Recorder")
     app.setQuitOnLastWindowClosed(False)  # lives in the tray

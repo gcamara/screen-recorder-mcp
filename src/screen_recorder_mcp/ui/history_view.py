@@ -6,6 +6,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QPixmap
+from shiboken6 import isValid
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QVBoxLayout, QWidget,
 )
@@ -108,7 +109,8 @@ class HistoryView(QWidget):
 
     @staticmethod
     def _apply_thumbnail(widget: HistoryRowWidget, path: object) -> None:
-        if path is None:
+        # The list may have been rebuilt (refresh) while ffmpeg made the thumbnail.
+        if path is None or not isValid(widget) or not isValid(widget.thumb):
             return
         pixmap = QPixmap(str(path))
         if not pixmap.isNull():
