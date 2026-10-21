@@ -14,6 +14,8 @@ You:    stop
 Claude: Saved ~/Videos/screen-recorder-mcp/rec-20261021-153000.mp4 (42 s)
 ```
 
+![Desktop app](docs/screenshots/main-player.png)
+
 ## Features
 
 - Record a single window (by title, app name or id) or a whole monitor.
@@ -23,6 +25,9 @@ Claude: Saved ~/Videos/screen-recorder-mcp/rec-20261021-153000.mp4 (42 s)
 - Constant frame rate MP4 (H.264), even when the app isn't redrawing.
 - Works without the GPU on Windows: if the GPU can't start a capture session (out of video memory,
   busy with a render or a game), it falls back to CPU capture on its own. You can also force it.
+- Optional desktop app laid out like the Windows Snipping Tool: selection overlay, recording toolbar
+  with pause, player with trim, GIF export, history and settings. When the app is open, the AI records
+  through it, so you always see the toolbar (with an "AI" badge) and can stop it.
 - Plain stdio MCP server, so any MCP client can use it (Claude Code, Claude Desktop, Cursor, ...).
 
 ## Platform support
@@ -59,6 +64,43 @@ uv sync
 Give **Screen Recording** permission to the app that launches the server (Terminal, iTerm, the
 Claude desktop app, ...) in System Settings > Privacy & Security, then restart that app.
 `audio="mic"` also needs **Microphone**.
+
+## Desktop app
+
+```bash
+uv run screen-recorder
+```
+
+It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
+
+- **Window**: hover and click a window. Only that app is recorded, even if something covers it.
+- **Rectangle**: drag an area of the screen. This is a screen region, so whatever is on top of it is recorded too.
+- **Full screen**: click a monitor.
+
+Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While recording, the toolbar
+has pause, stop, discard and the mic / system-audio toggles; it is hidden from screen captures. After
+stopping, the recording opens in the player: trim the start and end, export a GIF, save, copy or
+open the folder. Past recordings are under the history icon, settings under the gear.
+
+| | |
+|---|---|
+| ![Selection overlay](docs/screenshots/selection-rectangle.png) | ![Recording toolbar](docs/screenshots/recording-toolbar.png) |
+| ![Trim](docs/screenshots/trim-mode.png) | ![Settings](docs/screenshots/settings.png) |
+
+### How the app and the MCP server fit together
+
+```
+you ──▶ desktop app (tray, overlay, toolbar, player) ──┐
+                                                         ├──▶ recording service (one owner)
+AI ───▶ MCP server ──── localhost + token ──────────────┘
+         └─ app not running? records on its own, as before
+```
+
+The app writes `control.json` (port + random token) to your user's app-data folder and only accepts
+local connections that carry the token. The MCP server checks for it on every call: if the app is
+running, recordings go through the app (toolbar, history, settings are shared); if not, the MCP server
+records by itself. Recordings you make by hand show up in `list_recordings`, so you can tell the AI
+"make a GIF of my last recording".
 
 ## Connect it to your AI client
 
@@ -113,7 +155,12 @@ records the whole window.
 | `pick_region(target)` | Opens the crop overlay over the target and returns the rectangle you drew (or `null`) |
 | `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto")` | Starts recording |
 | `recording_status()` | Elapsed time, frames written, whether the target window was closed |
+| `pause_recording()` / `resume_recording()` | Pause and resume; the paused time is cut out |
 | `stop_recording()` | Finishes the file and returns its path and size |
+| `cancel_recording()` | Stops and deletes the partial file |
+| `list_recordings(limit?)` | Past recordings, newest first (made by you or by the AI) |
+| `trim_recording(recording_id, start_seconds, end_seconds)` | Saves a trimmed copy |
+| `export_gif(recording_id, high_quality)` | Exports a GIF next to the video |
 
 `target` accepts a window title or part of it, an app name (`chrome`, `notepad.exe`, `Safari`), a
 `window_id` from `list_targets`, or `monitor:N`.
@@ -131,7 +178,8 @@ macOS, unless you pass `output_dir`.
 - On Windows, `audio="system"` records every app's sound, not only the recorded one.
 - Recording a whole monitor captures whatever is on it, including windows on top.
 - Some apps block capture of their windows (DRM video, some password managers). Those come out black.
-- One recording at a time.
+- One recording at a time (shared between the app and the AI).
+- The app's global shortcut is Windows-only for now; on macOS open the app from the tray.
 
 ## How it works
 
