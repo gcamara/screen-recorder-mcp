@@ -1,0 +1,39 @@
+[project]
+name = "screen-recorder-mcp"
+version = "0.1.0"
+description = "MCP server that records a chosen window or monitor to MP4, ignoring apps placed in front of it"
+readme = "README.md"
+authors = [
+    { name = "Gabriel Camara", email = "gabriel.camarac@gmail.com" }
+]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["mcp", "screen-recording", "model-context-protocol", "screencapturekit", "windows-graphics-capture"]
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=2.3.0",
+    "numpy>=2.4.6",
+    "pyaudiowpatch>=0.2.12.9; sys_platform == 'win32'",
+    "windows-capture>=2.0.1; sys_platform == 'win32'",
+    "pyobjc-framework-ScreenCaptureKit>=10.3; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.3; sys_platform == 'darwin'",
+    "pyobjc-framework-CoreMedia>=10.3; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=10.3; sys_platform == 'darwin'",
+    "pyobjc-framework-libdispatch>=10.3; sys_platform == 'darwin'",
+    "sounddevice>=0.5; sys_platform == 'darwin'",
+]
+
+[project.urls]
+Repository = "https://github.com/gcamara/screen-recorder-mcp"
+
+[project.scripts]
+screen-recorder-mcp = "screen_recorder_mcp.server:main"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
