@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
+from typing import Callable
 
 from mcp.server.mcpserver import MCPServer
 
-from screen_recorder_mcp.backends import current_backend
-from screen_recorder_mcp.capture import AudioMode
-from screen_recorder_mcp.frame_sources import CaptureMode
-from screen_recorder_mcp.geometry import Rect
-from screen_recorder_mcp.recorder import RecordingSession
-from screen_recorder_mcp.region_picker import pick_region_interactively
-from screen_recorder_mcp.session_factory import DEFAULT_OUTPUT_DIR, build_session, plan_recording
-from screen_recorder_mcp.targets import CaptureTarget, resolve_target
+from screen_recorder_mcp.region_picker import TkRegionPicker
+from screen_recorder_mcp.service import RecorderService, app_data_dir
+from screen_recorder_mcp.service_provider import ServiceProvider
+from screen_recorder_mcp.tools import RecorderTools
 
 INSTRUCTIONS = """\
 Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
@@ -31,102 +27,65 @@ Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
 4. Audio: keep audio="none" unless the user explicitly asked for sound
    ("system" = on Windows everything the PC plays, on macOS only the recorded
    app's sound, or every app's for a monitor; "mic" = microphone).
+5. Control: pause_recording / resume_recording / cancel_recording (deletes the
+   partial file) act on the running recording; stop_recording returns the MP4 path.
+   Use delay_seconds on start_recording only when the user wants a countdown.
+6. After recording: list_recordings shows the history (also recordings the user
+   made by hand in the desktop app); trim_recording cuts a new file from one and
+   export_gif converts one to a GIF. Both keep the original.
+When the desktop app is running, recordings you start appear in its toolbar so the
+user can always see, pause or stop them; otherwise recording runs inside this server.
 Window recordings only contain that app: windows moved in front of it are not
 recorded. A minimized window produces no frames. On macOS the host app needs
 the Screen Recording permission (System Settings > Privacy & Security).
 """
 
-mcp = MCPServer("screen-recorder", instructions=INSTRUCTIONS)
-_backend = current_backend()
-_active: dict[str, RecordingSession] = {}
+_TOOL_NAMES: tuple[str, ...] = (
+    "list_targets",
+    "pick_region",
+    "start_recording",
+    "recording_status",
+    "pause_recording",
+    "resume_recording",
+    "stop_recording",
+    "cancel_recording",
+    "list_recordings",
+    "trim_recording",
+    "export_gif",
+)
 
 
-def _resolve(target: str) -> CaptureTarget:
-    return resolve_target(target, _backend.windows, _backend.monitor_rects)
+def build_local_service() -> RecorderService:
+    """In-process service for when the desktop app is not running.
 
-
-@mcp.tool()
-def list_targets() -> dict[str, object]:
-    """List recordable windows (front-most first) and monitors (`monitor:N`)."""
-    monitors = [
-        {"target": f"monitor:{index}", "rect": rect.as_dict()}
-        for index, rect in enumerate(_backend.monitor_rects(), start=1)
-    ]
-    return {"windows": [w.as_dict() for w in _backend.windows.list_windows()], "monitors": monitors}
-
-
-@mcp.tool()
-def pick_region(target: str) -> dict[str, object]:
-    """Show a drag-to-crop overlay over the target so the USER selects the area.
-
-    target: window title / process name / window_id, or `monitor:N`.
-    Returns `region` relative to the target (null = user pressed Esc, record all).
-    The OS may refuse to bring the app to the front; tell the user to keep the
-    app visible before calling this, since the overlay is semi-transparent.
+    Imported lazily: service_local is heavy and only needed in headless mode.
     """
-    resolved = _resolve(target)
-    if resolved.window_id is not None:
-        _backend.bring_to_front(resolved)
-        resolved = _resolve(str(resolved.window_id))  # rect may change after restore
-    region = pick_region_interactively(resolved.rect)
-    return {"target": resolved.as_dict(), "region": None if region is None else region.as_dict()}
+    from screen_recorder_mcp.backends import current_backend
+    from screen_recorder_mcp.service_local import LocalRecorderService
+
+    backend = current_backend()
+    backend.prepare_process()
+    return LocalRecorderService(backend, TkRegionPicker())
 
 
-@mcp.tool()
-def start_recording(
-    target: str,
-    region: dict[str, int] | None = None,
-    fps: int = 30,
-    audio: str = "none",
-    capture_cursor: bool = True,
-    output_dir: str | None = None,
-    capture: str = "auto",
-) -> dict[str, object]:
-    """Start recording a window or monitor to MP4 (H.264).
+def build_server(get_service: Callable[[], RecorderService]) -> MCPServer:
+    """MCP server whose tools resolve their RecorderService on every call.
 
-    target: window title / process name / window_id, or `monitor:N` (see list_targets).
-    region: optional {x, y, width, height} relative to the target, usually from pick_region.
-    audio: "none" (default), "system" or "mic" — only when the user asked for audio.
-    capture: "auto" (default: GPU capture, CPU if the GPU can't start), "gpu", or "cpu"
-             (Windows only; no GPU use at all, no cursor in the video).
+    Example: build_server(lambda: fake_service).run()
     """
-    if _active:
-        raise RuntimeError("a recording is already running; call stop_recording first")
-    mode = AudioMode(audio)
-    crop = None if region is None else Rect(**region)
-    plan = plan_recording(_resolve(target), crop, fps, mode, _output_dir(output_dir))
-    session = build_session(_backend, plan, mode, capture_cursor, CaptureMode(capture))
-    session.start()
-    _active["current"] = session
-    return session.status()
+    server = MCPServer("screen-recorder", instructions=INSTRUCTIONS)
+    tools = RecorderTools(get_service)
+    for name in _TOOL_NAMES:
+        server.add_tool(getattr(tools, name), name=name)
+    return server
 
 
-@mcp.tool()
-def recording_status() -> dict[str, object]:
-    """Report the running recording (elapsed time, frames, whether the target closed)."""
-    session = _active.get("current")
-    return {"recording": False} if session is None else {"recording": True, **session.status()}
-
-
-@mcp.tool()
-def stop_recording() -> dict[str, object]:
-    """Stop the running recording and return the final MP4 path."""
-    session = _active.pop("current", None)
-    if session is None:
-        raise RuntimeError("no recording is running; call start_recording first")
-    status = session.status()
-    output = session.stop()
-    return {**status, "output": str(output), "size_bytes": output.stat().st_size}
-
-
-def _output_dir(raw: str | None) -> Path:
-    return DEFAULT_OUTPUT_DIR if raw is None else Path(raw).expanduser()
+mcp = build_server(ServiceProvider(app_data_dir(), build_local_service).get)
 
 
 def main() -> None:
     # stdout is the MCP channel: logs go to stderr only.
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(message)s")
-    _backend.prepare_process()
     mcp.run()
 
 

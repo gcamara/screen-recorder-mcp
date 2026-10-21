@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 import tkinter as tk
+from typing import Callable
 
 from screen_recorder_mcp.backends import current_backend
 from screen_recorder_mcp.geometry import Rect
@@ -119,6 +120,19 @@ def pick_region_interactively(bounds: Rect, timeout_seconds: float = 120) -> Rec
     if completed.returncode != 0:
         raise RuntimeError(f"region picker exited {completed.returncode}: {completed.stderr!r}")
     return parse_picker_output(completed.stdout.decode())
+
+
+class TkRegionPicker:
+    """RegionPicker for headless mode: the Tk overlay subprocess.
+
+    Example: TkRegionPicker().pick_region(Rect(0, 0, 1920, 1080)) -> Rect(...) or None
+    """
+
+    def __init__(self, picker: Callable[[Rect], Rect | None] = pick_region_interactively) -> None:
+        self._picker = picker
+
+    def pick_region(self, bounds: Rect) -> Rect | None:
+        return self._picker(bounds)
 
 
 def parse_picker_output(stdout: str) -> Rect | None:
