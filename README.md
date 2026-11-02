@@ -182,6 +182,21 @@ records the whole window.
 | `contact_sheet(recording_id? \| path?, mode="changes", max_frames=12, columns=4, ...)` | One overview image: a grid of frames captioned with their times |
 | `sample_frames(recording_id? \| path?, mode="changes", max_frames=12, start_seconds?, end_seconds?, width=800, ...)` | Frames as inline images plus their times; full-size PNGs stay on disk |
 | `frame_at(seconds, recording_id? \| path?, crop?, width?)` | One frame, optionally cropped, to read small details |
+| `make_manual(steps, recording_id? \| path?, narrate=true, voice?, rate?, subtitles="file", output_name?)` | A video manual: timed annotations and a voice-over rendered over a recording |
+| `list_voices(language?)` | Voices for `make_manual` |
+
+### Letting the AI drive the scene
+
+When the assistant clicks through a flow itself (browser automation, typing), it sets up the first
+screen before `start_recording`, and between steps calls `pause_recording`, prepares the next screen
+(navigates, loads data, closes pop-ups, waits for loading) and `resume_recording`. Paused time is cut
+out, so the video shows only the steps. For demos it turns on `cursor_halo` and `show_clicks`.
+
+`make_manual` then adds the explanation: per step, a narration (`say`, spoken with edge-tts, online)
+and annotations (text, arrow, box, ellipse, numbered badge, spotlight, blur). When the speech is
+longer than the step, the video holds the step's first frame until the voice ends (`hold="end"`
+holds its last frame), so nobody has to act slowly while recording. Install the voice-over with
+`uv sync --extra tts`.
 
 ### Letting the AI watch a recording
 

@@ -125,8 +125,10 @@ class RecorderTools:
         capture: "auto" (default: GPU capture, CPU if the GPU can't start), "gpu", or "cpu"
                  (Windows only; no GPU use at all, no cursor in the video).
         delay_seconds: countdown before capture starts (0 default; the user sees it on screen).
+              To prepare a scene yourself, set it up before this call instead.
         cursor_halo / show_clicks / show_keys: input feedback burned into the video (Windows), for
-              demos and bug reports: a halo around the pointer, click ripples, keystroke chips.
+              demos, manuals and bug reports: a halo around the pointer, click ripples, keystroke
+              chips. Turn on cursor_halo and show_clicks when you click through a flow for viewers.
               show_keys: "off", "shortcuts" (Ctrl/Alt/Win combos, F-keys) or "all" (typed text too,
               passwords included: only when the user asked). None = the app's settings.
         The user sees the recording toolbar of the desktop app, if it is running.
@@ -163,11 +165,15 @@ class RecorderTools:
         return {"recording": status["state"] != RecordingState.IDLE.value, **status}
 
     def pause_recording(self) -> JsonDict:
-        """Pause the running recording; paused time is not recorded."""
+        """Pause the running recording; paused time is cut out of the video.
+
+        Use it to set up the next step unseen (navigate, load data, close pop-ups, wait for
+        loading), then resume_recording: the video jumps straight to the next step.
+        """
         return to_jsonable(self._get_service().pause())  # type: ignore[return-value]
 
     def resume_recording(self) -> JsonDict:
-        """Resume a paused recording."""
+        """Resume a paused recording, once the next scene is ready."""
         return to_jsonable(self._get_service().resume())  # type: ignore[return-value]
 
     def stop_recording(self) -> JsonDict:
@@ -180,7 +186,7 @@ class RecorderTools:
         return {"cancelled": True}
 
     def list_recordings(self, limit: int = 20) -> JsonDict:
-        """Recording history, newest first, including recordings the user made by hand."""
+        """Recording history, newest first, including recordings the user made or opened in the desktop app."""
         infos = self._get_service().history(limit)
         return {"recordings": [_info_dict(info) for info in infos]}
 
@@ -309,7 +315,8 @@ class RecorderTools:
         """Turn a recording into a video manual: timed annotations and an optional voice-over.
 
         steps: [{"at": seconds in the recording, "say": "narration (optional)", "until": optional end,
-                 "annotations": [...]}]. A step lasts until the next one. Annotations (video pixels, as in
+                 "hold": "start" | "end", "annotations": [...]}]. A step lasts until the next one (or
+                 `until`, in recording seconds). Annotations (video pixels, as in
                  frame_at), each optionally with "start"/"end" seconds after the step begins and "color":
                  {"type": "text", "x", "y", "text", "width"?}   a text block (wraps at width)
                  {"type": "arrow", "from": [x, y], "to": [x, y]}
@@ -318,7 +325,10 @@ class RecorderTools:
                  {"type": "spotlight", "x", "y", "width", "height"}   dims everything else
                  {"type": "blur", "x", "y", "width", "height"}   hides secrets
         narrate: speak each "say" with edge-tts (online, Microsoft). When the speech is longer than
-                 the step, the video holds the step's last frame until the voice finishes.
+                 the step, the video holds a frame until the voice finishes: by default the step's
+                 FIRST frame, so the viewer hears what to do before it happens; hold="end" freezes
+                 its last frame instead (for a result to look at). Later steps move along, so
+                 "at" stays in recording time and you need not leave pauses while recording.
         voice: any edge-tts voice (see list_voices); the default is multilingual and reads any language.
         rate: speech speed, e.g. "+10%". subtitles: "file" (.srt next to the video), "burn" or "none".
         Workflow: record, use contact_sheet / frame_at to find moments and coordinates, then call this;
