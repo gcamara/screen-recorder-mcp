@@ -33,6 +33,10 @@ Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
 6. After recording: list_recordings shows the history (also recordings the user
    made by hand in the desktop app); trim_recording cuts a new file from one and
    export_gif converts one to a GIF. Both keep the original.
+7. Watching a recording (yours or one the user made by hand): contact_sheet first
+   (one cheap overview image with times), then sample_frames with
+   start_seconds/end_seconds around the interesting moment, and frame_at with crop
+   to read small details. Without recording_id/path they use the latest recording.
 When the desktop app is running, recordings you start appear in its toolbar so the
 user can always see, pause or stop them; otherwise recording runs inside this server.
 Window recordings only contain that app: windows moved in front of it are not
@@ -52,6 +56,9 @@ _TOOL_NAMES: tuple[str, ...] = (
     "list_recordings",
     "trim_recording",
     "export_gif",
+    "sample_frames",
+    "contact_sheet",
+    "frame_at",
 )
 
 
