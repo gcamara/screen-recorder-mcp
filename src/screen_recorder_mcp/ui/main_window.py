@@ -5,7 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QStackedWidget, QToolButton, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QStackedWidget, QToolButton,
+    QVBoxLayout, QWidget,
 )
 
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
@@ -99,7 +100,12 @@ class MainWindow(QMainWindow):
         self._history = HistoryView(self._service, thumbnails, runner, self._playback.clipboard, self._theme)
         self._settings = SettingsView(self._service, dialogs)
         self._settings.load()
-        for page in (self._home, self._history, self._settings):
+        settings_page = QScrollArea()  # the settings outgrow a small window; never cut a section off
+        settings_page.setWidget(self._settings)
+        settings_page.setWidgetResizable(True)
+        settings_page.setFrameShape(QFrame.Shape.NoFrame)
+        settings_page.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }")
+        for page in (self._home, self._history, settings_page):
             self._pages.addWidget(page)
         column.addWidget(self._pages, 1)
         self._toast = role_label("", "muted")

@@ -77,7 +77,7 @@ It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
 - **Rectangle**: drag an area of the screen. This is a screen region, so whatever is on top of it is recorded too.
 - **Full screen**: click a monitor.
 
-**Input feedback** (Settings > Input feedback, Windows): a halo around the mouse pointer, a ripple on
+**Input feedback** (**Mouse** and **Keys** on the selection toolbar, or Settings > Input feedback; Windows): a halo around the mouse pointer, a ripple on
 each click (blue left, orange right, a dot while held) and keystroke chips at the bottom (shortcuts only,
 or all keys including typed text). They are drawn into the video itself, so they also show up in
 window recordings. All off by default; "All keys" also shows passwords typed during the recording.
