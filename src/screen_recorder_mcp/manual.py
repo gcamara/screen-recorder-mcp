@@ -419,6 +419,8 @@ def annotation_bottom(item: Annotation) -> int:
         return max(item.points[0][1], item.points[1][1])
     if item.rect is None:
         return 0
+    if item.kind == "badge":
+        return item.rect.y + 25  # centred on y, ~46 px across at 1080p
     return item.rect.y + (item.rect.height or 90)
 
 
