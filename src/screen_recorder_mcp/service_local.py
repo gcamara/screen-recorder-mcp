@@ -182,8 +182,11 @@ class LocalRecorderService:
         self._library.delete(recording_id)
         self._emit(RecorderEventKind.HISTORY_CHANGED)
 
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo:
-        info = self._library.trim(recording_id, start_seconds, end_seconds)
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo:
+        info = self._library.trim(recording_id, start_seconds, end_seconds, crop, output_name, overwrite)
         self._emit(RecorderEventKind.HISTORY_CHANGED, info=info)
         return info
 

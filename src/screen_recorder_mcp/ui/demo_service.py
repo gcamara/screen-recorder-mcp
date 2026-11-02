@@ -190,7 +190,10 @@ class DemoRecorderService:
                 return info
         raise LookupError(f"recording_id={recording_id!r} not in history {[i.recording_id for i in self._history]}")
 
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo:
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo:
         with self._lock:
             source = self._find(recording_id)
             if not 0 <= start_seconds < end_seconds <= source.duration_seconds:

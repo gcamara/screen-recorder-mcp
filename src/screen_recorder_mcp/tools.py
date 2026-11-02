@@ -123,9 +123,20 @@ class RecorderTools:
         infos = self._get_service().history(limit)
         return {"recordings": [_info_dict(info) for info in infos]}
 
-    def trim_recording(self, recording_id: str, start_seconds: float, end_seconds: float) -> JsonDict:
-        """Cut a recording to [start_seconds, end_seconds]; saves a new file, the original is kept."""
-        return _info_dict(self._get_service().trim(recording_id, start_seconds, end_seconds))
+    def trim_recording(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: dict[str, int] | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> JsonDict:  # fmt: skip
+        """Cut a recording to [start_seconds, end_seconds]; by default saves a new file and keeps the original.
+
+        crop: optional {x, y, width, height} in video pixels to keep only that part of the picture
+              (e.g. one panel of a window); frame_at with the same crop previews it.
+        output_name: file name for the new copy, saved next to the original (default '<name>-trim.mp4').
+        overwrite: replace the original file instead (same recording_id). Only when the user asked for it.
+        """
+        region = None if crop is None else Rect(**crop)
+        info = self._get_service().trim(recording_id, start_seconds, end_seconds, region, output_name, overwrite)
+        return _info_dict(info)
 
     def export_gif(self, recording_id: str, high_quality: bool = False, output: str | None = None) -> JsonDict:
         """Convert a recording to an animated GIF and return its path."""

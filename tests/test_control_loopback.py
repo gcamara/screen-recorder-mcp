@@ -71,6 +71,14 @@ def test_targets_pick_region_trim_gif_delete(remote: RemoteRecorderService) -> N
     assert [item.recording_id for item in remote.history()] == [info.recording_id]
 
 
+def test_trim_crop_crosses_the_wire(remote: RemoteRecorderService, fake: FakeRecorderService) -> None:
+    remote.start(RecordingRequest("Notepad"))
+    info = remote.stop()
+    remote.trim(info.recording_id, 0.0, 1.0, Rect(4, 6, 200, 100))
+    remote.trim(info.recording_id, 0.0, 1.0)
+    assert fake.trim_crops == [Rect(4, 6, 200, 100), None]
+
+
 def test_cancel_and_settings(remote: RemoteRecorderService) -> None:
     remote.start(RecordingRequest("Notepad"))
     remote.cancel()
