@@ -10,6 +10,7 @@ from screen_recorder_mcp.backends.windows.wgc_frame_source import WgcFrameSource
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
 from screen_recorder_mcp.frame_sources import CaptureMode, FallbackFrameSource, PollingFrameSource
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import InputTracker, OverlayOptions
 from screen_recorder_mcp.targets import CaptureTarget
 from screen_recorder_mcp.window_registry import WindowInfo
 
@@ -66,6 +67,16 @@ class WindowsBackend:
     def audio_recorder(self, mode: AudioMode, target: CaptureTarget, output: Path) -> AudioRecorder:
         # WASAPI has no per-window loopback here: "system" is every app's sound.
         return WasapiAudioRecorder(mode, output)
+
+    def input_tracker(self, options: OverlayOptions) -> InputTracker:
+        from screen_recorder_mcp.backends.windows.input_hooks import WindowsInputTracker
+
+        return WindowsInputTracker(options)
+
+    def target_rect(self, target: CaptureTarget) -> Rect:
+        if target.window_id is not None and win32_api.is_window(target.window_id):
+            return win32_api.visible_frame_rect(target.window_id)
+        return target.rect
 
 
 _CPU_POLL_SECONDS = 1 / 30

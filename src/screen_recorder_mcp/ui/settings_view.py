@@ -11,11 +11,13 @@ from PySide6.QtWidgets import (
 )
 
 from screen_recorder_mcp.frame_sources import CaptureMode
+from screen_recorder_mcp.input_overlay import KeyMode
 from screen_recorder_mcp.service import RecorderService, RecorderSettings
 from screen_recorder_mcp.ui.dialogs import Dialogs
 from screen_recorder_mcp.ui.widgets_common import role_label
 
 FPS_CHOICES = (15, 24, 30, 60)
+KEY_MODE_LABELS = {KeyMode.OFF: "Off", KeyMode.SHORTCUTS: "Shortcuts only", KeyMode.ALL: "All keys"}
 THEME_CHOICES = ("system", "dark", "light")
 
 
@@ -49,6 +51,7 @@ class SettingsView(QWidget):
         outer.addWidget(role_label("Settings", "title"))
         outer.addWidget(self._card("RECORDING", self._recording_form()))
         outer.addWidget(self._card("AUDIO", self._audio_form()))
+        outer.addWidget(self._card("INPUT FEEDBACK", self._input_form()))
         outer.addWidget(self._card("APP", self._app_form()))
         outer.addStretch(1)
 
@@ -93,6 +96,21 @@ class SettingsView(QWidget):
         column.addWidget(self._system)
         return column
 
+    def _input_form(self) -> QVBoxLayout:
+        column = QVBoxLayout()
+        self._halo = self._check("Highlight the mouse pointer")
+        self._clicks = self._check("Show mouse clicks")
+        self._keys = self._combo([KEY_MODE_LABELS[mode] for mode in KeyMode])
+        form = self._form()
+        form.addRow("Show keystrokes", self._keys)
+        column.addWidget(self._halo)
+        column.addWidget(self._clicks)
+        column.addLayout(form)
+        column.addWidget(role_label(
+            "Drawn into the video (Windows). \"All keys\" also shows typed text, passwords included.", "muted"
+        ))
+        return column
+
     def _app_form(self) -> QVBoxLayout:
         column = QVBoxLayout()
         form = self._form()
@@ -134,7 +152,7 @@ class SettingsView(QWidget):
         settings = self._service.get_settings()
         self._loaded = settings
         widgets = (self._fps, self._capture, self._cursor, self._mic, self._system, self._auto_copy,
-                   self._ai_toolbar, self._theme)
+                   self._ai_toolbar, self._theme, self._halo, self._clicks, self._keys)
         for widget in widgets:
             widget.blockSignals(True)
         self._folder.setText(str(settings.output_dir))
@@ -147,6 +165,9 @@ class SettingsView(QWidget):
         self._ai_toolbar.setChecked(settings.show_toolbar_for_ai_recordings)
         self._theme.setCurrentText(settings.theme)
         self._hotkey.setText(settings.hotkey)
+        self._halo.setChecked(settings.highlight_cursor)
+        self._clicks.setChecked(settings.show_clicks)
+        self._keys.setCurrentText(KEY_MODE_LABELS[settings.show_keys])
         for widget in widgets:
             widget.blockSignals(False)
 
@@ -159,6 +180,8 @@ class SettingsView(QWidget):
             auto_copy_to_clipboard=self._auto_copy.isChecked(),
             show_toolbar_for_ai_recordings=self._ai_toolbar.isChecked(),
             hotkey=self._hotkey.text().strip() or base.hotkey, theme=self._theme.currentText(),  # type: ignore[arg-type]
+            highlight_cursor=self._halo.isChecked(), show_clicks=self._clicks.isChecked(),
+            show_keys=next(mode for mode, label in KEY_MODE_LABELS.items() if label == self._keys.currentText()),
         )
 
     def _save(self) -> None:
