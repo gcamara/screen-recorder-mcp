@@ -18,6 +18,7 @@ from screen_recorder_mcp.ui.theme_controller import ThemeController
 from screen_recorder_mcp.ui.trim_bar import TrimBar
 from screen_recorder_mcp.ui.video_surface import VideoSurface
 from screen_recorder_mcp.ui.view_models import TrimModel
+from screen_recorder_mcp.ui.volume_control import VolumeControl
 from screen_recorder_mcp.ui.widgets_common import IconButton, role_label
 
 
@@ -74,15 +75,16 @@ class PlaybackView(QWidget):
         self._time = role_label("00:00 / 00:00", "mono")
         self._slider = QSlider(Qt.Orientation.Horizontal)
         self._slider.setRange(0, 0)
-        self._mute = IconButton("volume", "Mute", self._theme, tint="text_muted")
+        self._volume = VolumeControl(self._theme)
+        self._volume.changed.connect(self._apply_volume)
+        self._volume.apply()
         for widget in (self._play, self._time):
             row.addWidget(widget)
         row.addWidget(self._slider, 1)
-        row.addWidget(self._mute)
+        row.addWidget(self._volume)
         self._play.clicked.connect(self.toggle_play)
-        self._mute.clicked.connect(self._toggle_mute)
         self._slider.sliderMoved.connect(self._player.setPosition)
-        self._transport_widgets = [self._play, self._time, self._slider, self._mute]
+        self._transport_widgets = [self._play, self._time, self._slider, self._volume]
         return row
 
     def _build_trim_row(self) -> QWidget:
@@ -172,10 +174,12 @@ class PlaybackView(QWidget):
         playing = self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
         self._player.pause() if playing else self._player.play()
 
-    def _toggle_mute(self) -> None:
-        muted = not self._audio.isMuted()
+    def _apply_volume(self, volume: float, muted: bool) -> None:
+        self._audio.setVolume(volume)
         self._audio.setMuted(muted)
-        self._mute.set_glyph("volume-off" if muted else "volume")
+
+    def volume(self) -> VolumeControl:
+        return self._volume
 
     def _sync_play_icon(self, state: QMediaPlayer.PlaybackState) -> None:
         playing = state == QMediaPlayer.PlaybackState.PlayingState
