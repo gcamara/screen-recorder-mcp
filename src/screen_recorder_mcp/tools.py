@@ -15,6 +15,7 @@ from screen_recorder_mcp.frames import (
 )
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 from screen_recorder_mcp.service import (
     RecorderService,
     RecordingInfo,
@@ -105,6 +106,9 @@ class RecorderTools:
         output_dir: str | None = None,
         capture: str = "auto",
         delay_seconds: int = 0,
+        cursor_halo: bool | None = None,
+        show_clicks: bool | None = None,
+        show_keys: str | None = None,
     ) -> JsonDict:
         """Start recording a window or monitor to MP4 (H.264).
 
@@ -114,6 +118,10 @@ class RecorderTools:
         capture: "auto" (default: GPU capture, CPU if the GPU can't start), "gpu", or "cpu"
                  (Windows only; no GPU use at all, no cursor in the video).
         delay_seconds: countdown before capture starts (0 default; the user sees it on screen).
+        cursor_halo / show_clicks / show_keys: input feedback burned into the video (Windows), for
+              demos and bug reports: a halo around the pointer, click ripples, keystroke chips.
+              show_keys: "off", "shortcuts" (Ctrl/Alt/Win combos, F-keys) or "all" (typed text too,
+              passwords included: only when the user asked). None = the app's settings.
         The user sees the recording toolbar of the desktop app, if it is running.
         """
         request = RecordingRequest(
@@ -126,8 +134,20 @@ class RecorderTools:
             output_dir=None if output_dir is None else Path(output_dir).expanduser(),
             started_by="ai",
             delay_seconds=delay_seconds,
+            overlay=self._overlay(cursor_halo, show_clicks, show_keys),
         )
         return to_jsonable(self._get_service().start(request))  # type: ignore[return-value]
+
+    def _overlay(self, cursor_halo: bool | None, show_clicks: bool | None, show_keys: str | None) -> OverlayOptions | None:
+        """Only the arguments given override the app's settings; none given = settings decide."""
+        if cursor_halo is None and show_clicks is None and show_keys is None:
+            return None
+        base = self._get_service().get_settings().overlay_options()
+        return OverlayOptions(
+            base.cursor_halo if cursor_halo is None else cursor_halo,
+            base.show_clicks if show_clicks is None else show_clicks,
+            base.show_keys if show_keys is None else parse_choice(KeyMode, show_keys, "show_keys"),
+        )
 
     def recording_status(self) -> JsonDict:
         """Report the running recording (state, elapsed time, countdown, whether the target closed)."""

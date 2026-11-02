@@ -260,8 +260,9 @@ class LocalRecorderService:
         request = active.request
         try:
             active.plan = self._plan(active)
+            overlay = request.overlay or self._settings.get().overlay_options()
             active.session = self._session_builder(
-                self._backend, active.plan, request.audio, request.capture_cursor, request.capture
+                self._backend, active.plan, request.audio, request.capture_cursor, request.capture, overlay
             )
             active.session.on_target_closed = lambda: self._emit(RecorderEventKind.TARGET_CLOSED)
             active.session.start()

@@ -30,6 +30,7 @@ from typing import Callable, Literal, Protocol
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 
 StartedBy = Literal["user", "ai"]
 
@@ -60,6 +61,7 @@ class RecordingRequest:
     output_dir: Path | None = None
     started_by: StartedBy = "user"
     delay_seconds: int = 0
+    overlay: OverlayOptions | None = None  # cursor halo / clicks / keys; None = the app's settings
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,12 @@ class RecorderSettings:
     show_toolbar_for_ai_recordings: bool = True
     hotkey: str = "ctrl+shift+r"  # global "new recording" shortcut (cmd+shift+r on macOS)
     theme: Literal["system", "dark", "light"] = "system"
+    highlight_cursor: bool = False  # yellow halo around the pointer, burned into the video
+    show_clicks: bool = False  # ripple on each click, dot while a button is held
+    show_keys: KeyMode = KeyMode.OFF  # keystroke chips; ALL also shows typed text (passwords too)
+
+    def overlay_options(self) -> OverlayOptions:
+        return OverlayOptions(self.highlight_cursor, self.show_clicks, self.show_keys)
 
 
 @dataclass(frozen=True)

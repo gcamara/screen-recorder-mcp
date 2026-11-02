@@ -12,6 +12,7 @@ from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.encoder import FfmpegEncoder
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import OverlayOptions, OverlayPipeline
 from screen_recorder_mcp.muxer import mux_audio
 from screen_recorder_mcp.recorder import RecordingParts, RecordingPlan, RecordingSession
 from screen_recorder_mcp.targets import CaptureTarget
@@ -61,6 +62,7 @@ def build_session(
     audio: AudioMode,
     capture_cursor: bool,
     capture_mode: CaptureMode = CaptureMode.AUTO,
+    overlay: OverlayOptions | None = None,
 ) -> RecordingSession:
     ffmpeg = find_ffmpeg()
     log_path = plan.output.with_suffix(".ffmpeg.log")
@@ -72,5 +74,15 @@ def build_session(
         encoder=FfmpegEncoder(ffmpeg, plan.video_only_path, log_path),
         audio=audio_recorder,
         muxer=partial(mux_audio, ffmpeg),
+        overlay=_overlay_pipeline(backend, plan, overlay),
     )
     return RecordingSession(plan, parts)
+
+
+def _overlay_pipeline(
+    backend: PlatformBackend, plan: RecordingPlan, options: OverlayOptions | None
+) -> OverlayPipeline | None:
+    if options is None or not options.enabled:
+        return None
+    target = plan.target
+    return OverlayPipeline(options, backend.input_tracker(options), lambda: backend.target_rect(target))
