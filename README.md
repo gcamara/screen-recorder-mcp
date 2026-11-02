@@ -171,6 +171,29 @@ records the whole window.
 | `list_recordings(limit?)` | Past recordings, newest first (made by you or by the AI) |
 | `trim_recording(recording_id, start_seconds, end_seconds)` | Saves a trimmed copy |
 | `export_gif(recording_id, high_quality)` | Exports a GIF next to the video |
+| `contact_sheet(recording_id? \| path?, mode="changes", max_frames=12, columns=4, ...)` | One overview image: a grid of frames captioned with their times |
+| `sample_frames(recording_id? \| path?, mode="changes", max_frames=12, start_seconds?, end_seconds?, width=800, ...)` | Frames as inline images plus their times; full-size PNGs stay on disk |
+| `frame_at(seconds, recording_id? \| path?, crop?, width?)` | One frame, optionally cropped, to read small details |
+
+### Letting the AI watch a recording
+
+`contact_sheet`, `sample_frames` and `frame_at` hand frames to the model as images, so it can follow
+what moved on screen: animations, transitions, flicker, the order things appeared in. They work on
+the latest recording when neither `recording_id` nor `path` is given, including recordings you made
+by hand in the desktop app ("look at my last recording").
+
+`mode` picks which frames:
+
+- `"changes"` (default) drops frames identical to the last kept one, so idle time costs nothing;
+- `"scenes"` keeps only big changes (`scene_threshold`, 0..1, default 0.1);
+- `"interval"` keeps one frame every `interval_seconds`;
+- `"timestamps"` (`sample_frames` only) takes the exact `timestamps` you list.
+
+When more frames match than `max_frames`, they are thinned evenly and `found` reports how many
+matched; narrow `start_seconds`/`end_seconds` to look closer. Each image costs the model roughly
+`width × height / 750` tokens, so the intended flow is one contact sheet, then a few frames around
+the moment that matters. Frames are written to `<recording>-frames/<N>/` next to the video.
+
 
 `target` accepts a window title or part of it, an app name (`chrome`, `notepad.exe`, `Safari`), a
 `window_id` from `list_targets`, or `monitor:N`.
