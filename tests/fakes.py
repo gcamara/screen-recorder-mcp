@@ -347,6 +347,13 @@ class FakeRecorderService:
     def history(self, limit: int = 50) -> list[RecordingInfo]:
         return self._history[:limit]
 
+    def import_recording(self, path: Path, derived_from: str | None = None) -> RecordingInfo:
+        source = self._find(derived_from) if derived_from else self._history[0]
+        info = replace(source, recording_id=f"imp-{len(self._history)}", path=path, derived_from=derived_from)
+        self._history.insert(0, info)
+        self._emit(RecorderEventKind.HISTORY_CHANGED)
+        return info
+
     def delete_recording(self, recording_id: str) -> None:
         self._find(recording_id)
         self._history = [info for info in self._history if info.recording_id != recording_id]

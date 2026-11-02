@@ -105,6 +105,9 @@ class RemoteRecorderService:
     def delete_recording(self, recording_id: str) -> None:
         self._call("delete_recording", recording_id=recording_id)
 
+    def import_recording(self, path: Path, derived_from: str | None = None) -> RecordingInfo:
+        return codec.info_from_json(self._call("import_recording", path=str(path), derived_from=derived_from))
+
     def trim(
         self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
         output_name: str | None = None, overwrite: bool = False,

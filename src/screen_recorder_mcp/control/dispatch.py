@@ -56,6 +56,9 @@ class RpcDispatcher:
             "status": lambda _p: service.status(),
             "history": lambda p: service.history(int(p.get("limit", 50))),  # type: ignore[call-overload]
             "delete_recording": self._delete_recording,
+            "import_recording": lambda p: self._service.import_recording(
+                Path(str(_need(p, "path"))), None if p.get("derived_from") is None else str(p["derived_from"])
+            ),
             "trim": self._trim,
             "export_gif": self._export_gif,
             "get_settings": lambda _p: service.get_settings(),

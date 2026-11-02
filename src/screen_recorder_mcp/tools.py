@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from enum import Enum
 from pathlib import Path
 from typing import Callable, TypeVar
@@ -16,12 +17,18 @@ from screen_recorder_mcp.frames import (
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
+from screen_recorder_mcp.manual import parse_steps, probe_source, render_manual
+from screen_recorder_mcp.media_tools import run_command
+from screen_recorder_mcp.narration import DEFAULT_VOICE, Narrator
+from screen_recorder_mcp.narration import list_voices as list_tts_voices
+from screen_recorder_mcp.recording_library import edit_output_path, unique_sibling
 from screen_recorder_mcp.service import (
     RecorderService,
     RecordingInfo,
     RecordingRequest,
     RecordingState,
     to_jsonable,
+    app_data_dir,
 )
 
 JsonDict = dict[str, object]
@@ -288,6 +295,60 @@ class RecorderTools:
         image = Image(data=inline_jpeg(frame_set.frames[0].path, _clamp_width(width), region), format="jpeg")
         return [json.dumps(_frame_set_dict(source, frame_set)), image]
 
+    def make_manual(
+        self,
+        steps: list[dict[str, object]],
+        recording_id: str | None = None,
+        path: str | None = None,
+        narrate: bool = True,
+        voice: str = DEFAULT_VOICE,
+        rate: str = "+0%",
+        subtitles: str = "file",
+        output_name: str | None = None,
+    ) -> JsonDict:
+        """Turn a recording into a video manual: timed annotations and an optional voice-over.
+
+        steps: [{"at": seconds in the recording, "say": "narration (optional)", "until": optional end,
+                 "annotations": [...]}]. A step lasts until the next one. Annotations (video pixels, as in
+                 frame_at), each optionally with "start"/"end" seconds after the step begins and "color":
+                 {"type": "text", "x", "y", "text", "width"?}   a text block (wraps at width)
+                 {"type": "arrow", "from": [x, y], "to": [x, y]}
+                 {"type": "box" | "ellipse", "x", "y", "width", "height"}   outline
+                 {"type": "badge", "x", "y", "text": "1"}   numbered circle centred on x, y
+                 {"type": "spotlight", "x", "y", "width", "height"}   dims everything else
+                 {"type": "blur", "x", "y", "width", "height"}   hides secrets
+        narrate: speak each "say" with edge-tts (online, Microsoft). When the speech is longer than
+                 the step, the video holds the step's last frame until the voice finishes.
+        voice: any edge-tts voice (see list_voices); the default is multilingual and reads any language.
+        rate: speech speed, e.g. "+10%". subtitles: "file" (.srt next to the video), "burn" or "none".
+        Workflow: record, use contact_sheet / frame_at to find moments and coordinates, then call this;
+        check the result with contact_sheet(path=...). The original recording is kept.
+        """
+        source = self._resolve_source(recording_id, path)
+        parsed = parse_steps(steps)
+        if not narrate:
+            parsed = [replace(step, say=None) for step in parsed]
+        ffmpeg, ffprobe = _media_binaries()
+        video = probe_source(ffprobe, source, run_command)
+        output = edit_output_path(source, output_name) if output_name else unique_sibling(source, "manual", ".mp4")
+        narrator = Narrator(app_data_dir() / "tts-cache", ffprobe) if narrate else None
+        result = render_manual(source, video, parsed, output, ffmpeg, narrator, voice, rate, subtitles)
+        source_id = recording_id or self._recording_id_for(source)
+        info = self._get_service().import_recording(result.output, source_id)
+        return {
+            **_info_dict(info),
+            "subtitles": None if result.subtitles is None else str(result.subtitles),
+            "narrated_steps": result.narrated_steps,
+            "holds": [{"at": hold.at, "seconds": hold.seconds} for hold in result.holds],
+        }
+
+    def list_voices(self, language: str | None = None) -> JsonDict:
+        """edge-tts voices for make_manual, filtered by locale prefix ("en", "ru", "de-DE"); multilingual ones always included."""
+        return {"voices": list_tts_voices(language)}
+
+    def _recording_id_for(self, source: Path) -> str | None:
+        return next((i.recording_id for i in self._get_service().history(_HISTORY_SCAN_LIMIT) if i.path == source), None)
+
     def _resolve_source(self, recording_id: str | None, path: str | None) -> Path:
         if recording_id is not None and path is not None:
             raise ValueError("pass either recording_id or path, not both")
@@ -302,6 +363,13 @@ class RecorderTools:
             if info.recording_id == recording_id:
                 return info.path
         raise ValueError(f"recording_id {recording_id!r} not found; call list_recordings for valid ids")
+
+
+def _media_binaries() -> tuple[str, str]:
+    from screen_recorder_mcp.media_tools import find_ffprobe
+    from screen_recorder_mcp.session_factory import find_ffmpeg
+
+    return find_ffmpeg(), find_ffprobe()
 
 
 def _default_extractor() -> FrameExtractor:

@@ -14,7 +14,7 @@ from tests.fakes import FakeRecorderService
 EXPECTED_TOOLS = {
     "list_targets", "pick_region", "start_recording", "recording_status", "pause_recording",
     "resume_recording", "stop_recording", "cancel_recording", "list_recordings", "trim_recording", "export_gif",
-    "sample_frames", "contact_sheet", "frame_at",
+    "sample_frames", "contact_sheet", "frame_at", "make_manual", "list_voices",
 }
 
 

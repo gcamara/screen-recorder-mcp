@@ -182,6 +182,17 @@ class LocalRecorderService:
         self._library.delete(recording_id)
         self._emit(RecorderEventKind.HISTORY_CHANGED)
 
+    def import_recording(self, path: Path, derived_from: str | None = None) -> RecordingInfo:
+        """Put a video made outside the recorder (a rendered manual) into the history."""
+        if not path.exists():
+            raise FileNotFoundError(f"{path} does not exist; expected a finished video")
+        source = next((i for i in self._library.entries(500) if i.recording_id == derived_from), None)
+        label = source.target_label if source else path.stem
+        started_by = source.started_by if source else "ai"
+        info = self._library.register(new_recording_id(), path, label, started_by, derived_from=derived_from)
+        self._emit(RecorderEventKind.HISTORY_CHANGED, info=info)
+        return info
+
     def trim(
         self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
         output_name: str | None = None, overwrite: bool = False,

@@ -37,6 +37,11 @@ Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
    (one cheap overview image with times), then sample_frames with
    start_seconds/end_seconds around the interesting moment, and frame_at with crop
    to read small details. Without recording_id/path they use the latest recording.
+8. Video manuals: record the flow, find each step's moment and the coordinates of
+   what to point at with contact_sheet / frame_at, then make_manual with steps
+   (narration via "say", annotations: text, arrow, box, ellipse, badge, spotlight,
+   blur). Write "say" in the user's language; the default voice is multilingual.
+   Check the result with contact_sheet(path=<returned output>).
 When the desktop app is running, recordings you start appear in its toolbar so the
 user can always see, pause or stop them; otherwise recording runs inside this server.
 Window recordings only contain that app: windows moved in front of it are not
@@ -59,6 +64,8 @@ _TOOL_NAMES: tuple[str, ...] = (
     "sample_frames",
     "contact_sheet",
     "frame_at",
+    "make_manual",
+    "list_voices",
 )
 
 
