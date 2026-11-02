@@ -105,8 +105,15 @@ class RemoteRecorderService:
     def delete_recording(self, recording_id: str) -> None:
         self._call("delete_recording", recording_id=recording_id)
 
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo:
-        raw = self._call("trim", recording_id=recording_id, start_seconds=start_seconds, end_seconds=end_seconds)
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo:
+        raw = self._call(
+            "trim", recording_id=recording_id, start_seconds=start_seconds, end_seconds=end_seconds,
+            crop=None if crop is None else crop.as_dict(),
+            output_name=output_name, overwrite=overwrite,
+        )  # fmt: skip
         return codec.info_from_json(raw)
 
     def export_gif(self, recording_id: str, high_quality: bool, output: Path | None = None) -> Path:

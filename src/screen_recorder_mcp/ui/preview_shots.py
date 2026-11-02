@@ -158,6 +158,11 @@ def _trim_gif_pages(app: QApplication, shell: AppShell, out: Path) -> None:
     playback._trim_bar.update()  # noqa: SLF001
     pump(app, 0.4)
     save(window, out, "trim-mode")
+    info = playback.current()
+    if info is not None:
+        playback.video().set_crop(Rect(info.width // 5, info.height // 6, info.width // 2, info.height // 2))
+        pump(app, 0.3)
+        save(window, out, "trim-crop")
     playback.exit_trim()
     info = playback.current()
     dialog = GifExportDialog(shell._service, info, shell.theme, shell.runner, lambda _n: None)  # noqa: SLF001

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from screen_recorder_mcp.service import RecordingInfo
 from screen_recorder_mcp.ui.demo_service import DemoRecorderService
+from screen_recorder_mcp.ui.save_edit_dialog import SaveChoice
 from screen_recorder_mcp.ui.thumbnails import ThumbnailMaker
 
 
@@ -40,6 +41,7 @@ class FakeDialogs:
     def __init__(self, save_to: Path | None = None, folder: Path | None = None, confirm: bool = True) -> None:
         self._save_to, self._folder, self._confirm = save_to, folder, confirm
         self.asked: list[str] = []
+        self.edit_choice: SaveChoice | None = None
 
     def save_path(self, suggested_name: str, start_dir: Path) -> Path | None:
         self.asked.append(f"save:{suggested_name}")
@@ -52,6 +54,10 @@ class FakeDialogs:
     def confirm(self, title: str, text: str) -> bool:
         self.asked.append(f"confirm:{title}")
         return self._confirm
+
+    def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None:
+        self.asked.append(f"save_edit:{suggested_name}")
+        return self.edit_choice
 
 
 class GifStubRecorderService(UiFakeRecorderService):

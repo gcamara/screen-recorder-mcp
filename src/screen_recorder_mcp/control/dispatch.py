@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Callable, Mapping
 
-from screen_recorder_mcp.control.codec import request_from_json
+from screen_recorder_mcp.control.codec import rect_from_json, request_from_json
 from screen_recorder_mcp.control.events import EventBus
 from screen_recorder_mcp.service import RecorderService, to_jsonable
 
@@ -71,7 +71,10 @@ class RpcDispatcher:
 
     def _trim(self, params: Params) -> object:
         return self._service.trim(
-            str(_need(params, "recording_id")), float(_need(params, "start_seconds")), float(_need(params, "end_seconds"))  # type: ignore[arg-type]
+            str(_need(params, "recording_id")), float(_need(params, "start_seconds")), float(_need(params, "end_seconds")),  # type: ignore[arg-type]
+            rect_from_json(params.get("crop")),
+            None if params.get("output_name") is None else str(params["output_name"]),
+            bool(params.get("overwrite", False)),
         )
 
     def _export_gif(self, params: Params) -> object:

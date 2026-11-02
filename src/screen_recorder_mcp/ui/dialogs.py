@@ -7,11 +7,14 @@ from typing import Protocol
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
+from screen_recorder_mcp.ui.save_edit_dialog import SaveChoice, SaveEditDialog
+
 
 class Dialogs(Protocol):
     def save_path(self, suggested_name: str, start_dir: Path) -> Path | None: ...
     def choose_folder(self, start_dir: Path) -> Path | None: ...
     def confirm(self, title: str, text: str) -> bool: ...
+    def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None: ...
 
 
 class QtDialogs:
@@ -34,3 +37,7 @@ class QtDialogs:
     def confirm(self, title: str, text: str) -> bool:
         answer = QMessageBox.question(self._parent, title, text)
         return answer == QMessageBox.StandardButton.Yes
+
+    def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None:
+        dialog = SaveEditDialog(source, suggested_name, summary, self._parent)
+        return dialog.choice if dialog.exec() else None

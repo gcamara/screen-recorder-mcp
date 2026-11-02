@@ -181,13 +181,15 @@ class FakeMediaTools:
     def __init__(self, duration: float = 4.0, audio: bool = False) -> None:
         self._probe = MediaProbe(duration, 100, 80, audio)
         self.trims: list[tuple[Path, float, float, Path]] = []
+        self.crops: list[Rect | None] = []
         self.gifs: list[tuple[Path, Path, bool]] = []
 
     def probe(self, path: Path) -> MediaProbe:
         return self._probe
 
-    def trim(self, source: Path, start: float, end: float, output: Path) -> None:
+    def trim(self, source: Path, start: float, end: float, output: Path, crop: Rect | None = None) -> None:
         self.trims.append((source, start, end, output))
+        self.crops.append(crop)
         output.write_bytes(b"trim")
         self._probe = MediaProbe(end - start, 100, 80, self._probe.has_audio)
 
@@ -291,6 +293,8 @@ class FakeRecorderService:
     def __init__(self) -> None:
         self.requests: list[RecordingRequest] = []
         self.picker_calls: list[str] = []
+        self.trim_crops: list[Rect | None] = []
+        self.trim_outputs: list[tuple[str | None, bool]] = []
         self._status = RecordingStatus(state=RecordingState.IDLE)
         self._history: list[RecordingInfo] = []
         self._listeners: list[RecorderListener] = []
@@ -345,7 +349,12 @@ class FakeRecorderService:
         self._history = [info for info in self._history if info.recording_id != recording_id]
         self._emit(RecorderEventKind.HISTORY_CHANGED)
 
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo:
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo:
+        self.trim_crops.append(crop)
+        self.trim_outputs.append((output_name, overwrite))
         source = self._find(recording_id)
         if not 0 <= start_seconds < end_seconds <= source.duration_seconds:
             raise ValueError(f"trim range {start_seconds}-{end_seconds} must fit 0-{source.duration_seconds}")

@@ -85,13 +85,16 @@ Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While 
 
 When you stop, the recording is copied to the clipboard (turn this off in Settings) and opens in the
 player: trim the start and end, export a GIF, save, open the folder, or copy it again as video, GIF or
-file path (also on right-click in the history). **Recent** in the toolbar, and in the tray menu, lists
+file path (also on right-click in the history). **Trim / Crop** also puts a frame with handles around
+the picture: drag its corners or edges to crop (or draw a new rectangle), drag inside to move it, and
+**Reset crop** to undo. **Save...** asks for a new file name (pre-filled, Enter saves) or to overwrite
+the original, then opens the result in the player. **Recent** in the toolbar, and in the tray menu, lists
 the latest recordings; settings are under the gear.
 
 | | |
 |---|---|
 | ![Selection overlay](docs/screenshots/selection-rectangle.png) | ![Recording toolbar](docs/screenshots/recording-toolbar.png) |
-| ![Trim](docs/screenshots/trim-mode.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Trim and crop](docs/screenshots/trim-crop.png) | ![Settings](docs/screenshots/settings.png) |
 
 ### How the app and the MCP server fit together
 
@@ -169,7 +172,7 @@ records the whole window.
 | `stop_recording()` | Finishes the file and returns its path and size |
 | `cancel_recording()` | Stops and deletes the partial file |
 | `list_recordings(limit?)` | Past recordings, newest first (made by you or by the AI) |
-| `trim_recording(recording_id, start_seconds, end_seconds)` | Saves a trimmed copy |
+| `trim_recording(recording_id, start_seconds, end_seconds, crop?, output_name?, overwrite=false)` | Saves a trimmed (and optionally cropped) copy, or overwrites the original |
 | `export_gif(recording_id, high_quality)` | Exports a GIF next to the video |
 
 `target` accepts a window title or part of it, an app name (`chrome`, `notepad.exe`, `Safari`), a
