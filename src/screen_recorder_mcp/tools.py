@@ -309,7 +309,7 @@ class RecorderTools:
         narrate: bool = True,
         voice: str = DEFAULT_VOICE,
         rate: str = "+0%",
-        subtitles: str = "file",
+        subtitles: str = "burn",
         output_name: str | None = None,
     ) -> JsonDict:
         """Turn a recording into a video manual: timed annotations and an optional voice-over.
@@ -330,7 +330,11 @@ class RecorderTools:
                  its last frame instead (for a result to look at). Later steps move along, so
                  "at" stays in recording time and you need not leave pauses while recording.
         voice: any edge-tts voice (see list_voices); the default is multilingual and reads any language.
-        rate: speech speed, e.g. "+10%". subtitles: "file" (.srt next to the video), "burn" or "none".
+        rate: speech speed, e.g. "+10%".
+        subtitles: how the narration text travels with the video, always inside the one file:
+                 "burn" (default; drawn into the picture, shows in browsers and any player),
+                 "track" (a subtitle stream viewers can switch off in desktop players; browsers do
+                 not show it) or "none".
         Workflow: record, use contact_sheet / frame_at to find moments and coordinates, then call this;
         check the result with contact_sheet(path=...). The original recording is kept.
         """
@@ -347,7 +351,7 @@ class RecorderTools:
         info = self._get_service().import_recording(result.output, source_id)
         return {
             **_info_dict(info),
-            "subtitles": None if result.subtitles is None else str(result.subtitles),
+            "subtitles": result.subtitles,
             "narrated_steps": result.narrated_steps,
             "holds": [{"at": hold.at, "seconds": hold.seconds} for hold in result.holds],
         }

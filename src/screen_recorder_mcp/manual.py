@@ -29,7 +29,10 @@ from screen_recorder_mcp.narration import DEFAULT_VOICE, Narrator, Sentence, Spe
 from screen_recorder_mcp.proc import hidden_window_flags
 
 ANNOTATION_TYPES = ("text", "arrow", "box", "ellipse", "badge", "spotlight", "blur")
-SUBTITLE_MODES = ("none", "file", "burn")
+# "burn": drawn into the picture, plays everywhere (browsers too); "track": a soft subtitle stream
+# inside the MP4 that desktop players can toggle (browsers ignore it). Never a loose .srt next to the
+# video: it gets lost as soon as the video is copied or uploaded.
+SUBTITLE_MODES = ("burn", "track", "none")
 HOLD_MODES = ("start", "end")
 DEFAULT_COLOR = "#ff4757"
 SPEECH_LEAD = 0.3  # seconds between a step starting and its voice
@@ -527,7 +530,7 @@ def probe_source(ffprobe: str, path: Path, runner: Callable[[list[str]], subproc
 @dataclass(frozen=True)
 class ManualResult:
     output: Path
-    subtitles: Path | None
+    subtitles: str | None  # the SUBTITLE_MODES entry applied, None when nothing was spoken
     duration: float
     holds: tuple[Hold, ...]
     narrated_steps: int
@@ -535,10 +538,10 @@ class ManualResult:
 
 def render_manual(
     source: Path, video: SourceVideo, steps: Sequence[Step], output: Path, ffmpeg: str,
-    narrator: Narrator | None = None, voice: str = DEFAULT_VOICE, rate: str = "+0%", subtitles: str = "file",
+    narrator: Narrator | None = None, voice: str = DEFAULT_VOICE, rate: str = "+0%", subtitles: str = "burn",
     progress: Callable[[float], None] | None = None,
 ) -> ManualResult:  # fmt: skip
-    """Synthesize, plan the holds, draw every output frame, mix the audio, write <output> (+ .srt)."""
+    """Synthesize, plan the holds, draw every output frame, mix the audio, write <output> with its subtitles."""
     if subtitles not in SUBTITLE_MODES:
         raise ValueError(f"subtitles must be one of {list(SUBTITLE_MODES)}, got {subtitles!r}")
     wants_voice = any(step.say for step in steps)
@@ -553,11 +556,11 @@ def render_manual(
         _mux_audio(source, video, plan, clips, silent, output, ffmpeg)
     finally:
         silent.unlink(missing_ok=True)
-    srt_path = None
-    if subtitles != "none" and any(clips):
-        srt_path = output.with_suffix(".srt")
-        srt_path.write_text(build_srt(plan, clips), encoding="utf-8")
-    return ManualResult(output, srt_path, plan.duration, plan.timeline.holds, sum(1 for c in clips if c))
+    spoken = any(clips)
+    if subtitles == "track" and spoken:
+        _embed_subtitles(output, build_srt(plan, clips), ffmpeg)
+    applied = subtitles if spoken and subtitles != "none" else None
+    return ManualResult(output, applied, plan.duration, plan.timeline.holds, sum(1 for c in clips if c))
 
 
 def _render_video(source: Path, video: SourceVideo, plan: Plan, overlay: Overlay, output: Path, ffmpeg: str,
@@ -653,3 +656,22 @@ def _mux_audio(source: Path, video: SourceVideo, plan: Plan, clips: Sequence[Spe
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg audio mix for {output} failed: {result.stderr.decode(errors='replace')[-400:]}")
 
+
+def _embed_subtitles(output: Path, srt: str, ffmpeg: str) -> None:
+    """Add `srt` to <output> as a mov_text subtitle stream (streams copied, nothing re-encoded)."""
+    srt_path = output.with_name(f"{output.stem}.subtitles.srt")
+    muxed = output.with_name(f"{output.stem}.with-subtitles.mp4")
+    srt_path.write_text(srt, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(output), "-i", str(srt_path),
+             "-map", "0", "-map", "1:s", "-c", "copy", "-c:s", "mov_text", "-disposition:s:0", "default",
+             "-movflags", "+faststart", str(muxed)],
+            stdin=subprocess.DEVNULL, capture_output=True, creationflags=hidden_window_flags(), check=False,
+        )  # fmt: skip
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg could not add subtitles to {output}: {result.stderr.decode(errors='replace')[-400:]}")
+        muxed.replace(output)
+    finally:
+        srt_path.unlink(missing_ok=True)
+        muxed.unlink(missing_ok=True)

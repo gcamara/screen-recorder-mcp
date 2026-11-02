@@ -197,12 +197,18 @@ def test_real_render_holds_for_speech_and_writes_subtitles(tmp_path: Path) -> No
         {"at": 0, "say": "First step.", "annotations": [{"type": "text", "x": 10, "y": 10, "text": "Step 1"}]},
         {"at": 1, "annotations": [{"type": "arrow", "from": [20, 200], "to": [160, 120]}]},
     ])  # fmt: skip
-    result = render_manual(source, video, steps, tmp_path / "rec-manual.mp4", "ffmpeg", narrator, subtitles="file")
+    result = render_manual(source, video, steps, tmp_path / "rec-manual.mp4", "ffmpeg", narrator, subtitles="track")
     assert result.holds and result.holds[0].at == 0.0 and result.narrated_steps == 1  # say first, then the step plays
     out = probe_source("ffprobe", result.output, run_command)
     assert out.has_audio and out.duration == pytest.approx(result.duration, abs=0.25)
     assert result.duration == pytest.approx(3.0 + result.holds[0].seconds, abs=0.01)
-    assert result.subtitles is not None and "First step." in result.subtitles.read_text(encoding="utf-8")
+    assert result.subtitles == "track"
+    subs = subprocess.run(
+        ["ffmpeg", "-loglevel", "error", "-i", str(result.output), "-map", "0:s:0", "-f", "srt", "-"],
+        capture_output=True, check=True,
+    )  # fmt: skip
+    assert b"First step." in subs.stdout
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["rec-manual.mp4", "rec.mp4"]  # no loose .srt
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg missing")
