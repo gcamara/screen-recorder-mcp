@@ -16,6 +16,8 @@ _PATHS: dict[str, str] = {
     "gear": '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
     "dots": '<circle cx="5.5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor"/>',
     "close": '<path d="M6 6l12 12M18 6L6 18"/>',
+    "pointer": '<path d="M5 3l13 7.5-5.5 1.5 3 5.5-2.6 1.4-3-5.5L6 17.5z"/>',
+    "keyboard": '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     "pause": '<path d="M9 5v14M15 5v14"/>',
     "play": '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>',
     "stop": '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',

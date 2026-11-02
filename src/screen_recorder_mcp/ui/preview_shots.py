@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 from screen_recorder_mcp.service import RecordingState, RecordingStatus, TargetList
 from screen_recorder_mcp.ui.demo_service import DemoRecorderService
 from screen_recorder_mcp.ui.gif_dialog import GifExportDialog
@@ -62,7 +63,8 @@ def selection_shot(theme: ThemeController, out: Path, mode: CaptureTargetMode) -
                   "rect": Rect(560, 200, 600, 400).as_dict()}],
         monitors=[{"target": "monitor:1", "rect": DESKTOP.as_dict()}],
     )
-    session = SelectionSession(theme, targets, [ScreenInfo(DESKTOP, 1.0)], mode)
+    feedback = OverlayOptions(cursor_halo=True, show_clicks=True, show_keys=KeyMode.SHORTCUTS)
+    session = SelectionSession(theme, targets, [ScreenInfo(DESKTOP, 1.0)], mode, overlay=feedback)
     session.show()
     overlay = session.overlays()[0]
     _prepare_overlay(overlay, mode)
