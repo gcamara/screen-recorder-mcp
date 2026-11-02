@@ -88,6 +88,9 @@ Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While 
 - the recording bar sits at the top of the screen with pause, stop, discard and the mic / system-audio
   toggles. Drag it anywhere; it remembers the spot. Neither the bar nor the border is ever part of the video.
 
+To work on any other video, drop the file on the window or use **More > Open video...** (`Ctrl+O`): it is
+added to the history and opens in the player.
+
 When you stop, the recording is copied to the clipboard (turn this off in Settings) and opens in the
 player: trim the start and end, export a GIF, save, open the folder, or copy it again as video, GIF or
 file path (also on right-click in the history). **Trim / Crop** also puts a frame with handles around

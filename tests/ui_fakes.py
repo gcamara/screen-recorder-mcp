@@ -41,6 +41,7 @@ class FakeDialogs:
     def __init__(self, save_to: Path | None = None, folder: Path | None = None, confirm: bool = True) -> None:
         self._save_to, self._folder, self._confirm = save_to, folder, confirm
         self.asked: list[str] = []
+        self.video_to_open: Path | None = None
         self.edit_choice: SaveChoice | None = None
 
     def save_path(self, suggested_name: str, start_dir: Path) -> Path | None:
@@ -54,6 +55,10 @@ class FakeDialogs:
     def confirm(self, title: str, text: str) -> bool:
         self.asked.append(f"confirm:{title}")
         return self._confirm
+
+    def open_video(self, start_dir: Path) -> Path | None:
+        self.asked.append("open_video")
+        return self.video_to_open
 
     def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None:
         self.asked.append(f"save_edit:{suggested_name}")
