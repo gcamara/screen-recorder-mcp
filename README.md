@@ -71,6 +71,11 @@ Claude desktop app, ...) in System Settings > Privacy & Security, then restart t
 uv run screen-recorder
 ```
 
+For a desktop shortcut with no console window, point it at the base interpreter's `pythonw.exe` (the
+`home` line in `.venv/pyvenv.cfg`) with `scripts/launch_app.pyw` as the argument; the venv's own
+`Scripts\pythonw.exe` starts a console `python.exe`. Launching the app again only brings the running
+window forward.
+
 It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
 
 - **Window**: hover and click a window. Only that app is recorded, even if something covers it.

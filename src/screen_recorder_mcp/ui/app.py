@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import logging
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
 from screen_recorder_mcp.service import RecorderService, app_data_dir
@@ -48,6 +51,43 @@ def ensure_log_stream(log_dir: Path) -> None:
     sys.stderr = (log_dir / "app.log").open("a", encoding="utf-8", buffering=1)
 
 
+def instance_key() -> str:
+    """Local socket name shared by every launch of the app for this user."""
+    return f"screen-recorder-mcp-{getpass.getuser()}"
+
+
+def hand_over_to_running_instance(key: str) -> bool:
+    """Ask an already running app to show its window; True means this launch should just exit.
+
+    A second instance would fail to register the hotkey and fight over control.json, so a
+    second double-click on the shortcut only brings the first window forward.
+    """
+    socket = QLocalSocket()
+    socket.connectToServer(key)
+    if not socket.waitForConnected(500):
+        return False
+    socket.write(b"show\n")
+    socket.waitForBytesWritten(500)
+    socket.disconnectFromServer()
+    return True
+
+
+def listen_for_later_launches(key: str, on_show: Callable[[], None]) -> QLocalServer:
+    QLocalServer.removeServer(key)  # a crashed instance can leave the name behind
+    server = QLocalServer()
+    if not server.listen(key):
+        log.warning(json.dumps({"event": "instance_listen_failed", "error": server.errorString()}))
+
+    def accept() -> None:
+        connection = server.nextPendingConnection()
+        if connection is not None:
+            connection.disconnectFromServer()
+        on_show()
+
+    server.newConnection.connect(accept)
+    return server
+
+
 def main() -> int:
     """Run the desktop app; returns the process exit code.
 
@@ -61,6 +101,10 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Screen Recorder")
     app.setQuitOnLastWindowClosed(False)  # lives in the tray
+    key = instance_key()
+    if hand_over_to_running_instance(key):
+        log.info(json.dumps({"event": "already_running", "action": "showed the existing window"}))
+        return 0
     load_bundled_fonts()
     theme = ThemeController(app)
     caller = GuiThreadCaller(app)
@@ -70,6 +114,7 @@ def main() -> int:
     handle = serve_control(service)
     log.info(json.dumps({"event": "control_server_started", "port": handle.port, "data_dir": str(app_data_dir())}))
     shell = AppShell(app, service, theme, app_data_dir())
+    instance_server = listen_for_later_launches(key, shell.show_window)  # noqa: F841 (kept alive for app.exec)
     shell.start()
     try:
         return app.exec()
