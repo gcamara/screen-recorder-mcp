@@ -252,13 +252,14 @@ class Painter:
     def __init__(self, width: int, height: int) -> None:
         self.width, self.height = width, height
         self.scale = max(0.6, height / 1080)
-        self._cache: dict[int, Sprite] = {}
+        # Keyed by content (annotations are frozen): an id() key can be reused by a new object.
+        self._sprites: dict[Annotation, Sprite] = {}
+        self._captions: dict[tuple[str, bool], Sprite] = {}
 
     def sprite(self, annotation: Annotation) -> Sprite:
-        key = id(annotation)
-        if key not in self._cache:
-            self._cache[key] = getattr(self, f"_{annotation.kind}")(annotation)
-        return self._cache[key]
+        if annotation not in self._sprites:
+            self._sprites[annotation] = getattr(self, f"_{annotation.kind}")(annotation)
+        return self._sprites[annotation]
 
     def _text(self, a: Annotation, caption: bool = False) -> Sprite:
         s = self.scale
@@ -285,11 +286,11 @@ class Painter:
         return _to_sprite(image, x, y)
 
     def caption(self, text: str, top: bool = False) -> Sprite:
-        key = hash((text, top))
-        if key not in self._cache:
+        key = (text, top)
+        if key not in self._captions:
             sprite = self._text(Annotation("text", text=text), caption=True)
-            self._cache[key] = Sprite(sprite.image, sprite.x, round(36 * self.scale)) if top else sprite
-        return self._cache[key]
+            self._captions[key] = Sprite(sprite.image, sprite.x, round(36 * self.scale)) if top else sprite
+        return self._captions[key]
 
     def _arrow(self, a: Annotation) -> Sprite:
         assert a.points is not None
