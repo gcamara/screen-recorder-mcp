@@ -1,4 +1,4 @@
-"""Desktop app launch: a second launch hands over to the running one; the console-free launcher."""
+"""Desktop app: single instance, console-free launcher, selection toolbar above its overlay."""
 
 from pathlib import Path
 
@@ -23,3 +23,16 @@ def test_launcher_script_names_the_app_module() -> None:
     script = Path(__file__).resolve().parent.parent / "scripts" / "launch_app.pyw"
     text = script.read_text(encoding="utf-8")
     assert 'run_module("screen_recorder_mcp.ui.app", run_name="__main__")' in text and "site-packages" in text
+
+
+def test_selection_toolbar_is_owned_by_its_overlay(qapp, theme) -> None:  # type: ignore[no-untyped-def]
+    from screen_recorder_mcp.geometry import Rect
+    from screen_recorder_mcp.service import TargetList
+    from screen_recorder_mcp.ui.selection_session import ScreenInfo, SelectionSession
+
+    screens = [ScreenInfo(Rect(0, 0, 800, 600), 1.0), ScreenInfo(Rect(800, 0, 800, 600), 1.0)]
+    monitors = [{"target": f"monitor:{i + 1}", "rect": s.logical.as_dict()} for i, s in enumerate(screens)]
+    session = SelectionSession(theme, TargetList(windows=[], monitors=monitors), screens, toolbar_screen=1)
+    toolbar = session.toolbar()
+    assert toolbar is not None and toolbar.isWindow()
+    assert toolbar.parentWidget() is session.overlays()[1]  # stays above the overlay that takes focus
