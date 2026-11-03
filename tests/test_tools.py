@@ -14,6 +14,7 @@ from tests.fakes import FakeRecorderService
 EXPECTED_TOOLS = {
     "list_targets", "pick_region", "start_recording", "recording_status", "pause_recording",
     "resume_recording", "stop_recording", "cancel_recording", "list_recordings", "trim_recording", "export_gif",
+    "sample_frames", "contact_sheet", "frame_at", "make_manual", "list_voices",
 }
 
 
@@ -27,7 +28,7 @@ def tools(fake: FakeRecorderService) -> RecorderTools:
     return RecorderTools(lambda: fake)
 
 
-def test_server_registers_the_eleven_tools_and_instructions(fake: FakeRecorderService) -> None:
+def test_server_registers_every_tool_and_instructions(fake: FakeRecorderService) -> None:
     server = build_server(lambda: fake)
     names = {tool.name for tool in asyncio.run(server.list_tools())}
     assert names == EXPECTED_TOOLS

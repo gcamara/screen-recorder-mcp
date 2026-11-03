@@ -14,6 +14,7 @@ from typing import Protocol
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import InputTracker, OverlayOptions
 from screen_recorder_mcp.targets import CaptureTarget
 from screen_recorder_mcp.window_registry import WindowLister
 
@@ -33,6 +34,9 @@ class PlatformBackend(Protocol):
     def audio_recorder(
         self, mode: AudioMode, target: CaptureTarget, output: Path
     ) -> AudioRecorder: ...
+    def input_tracker(self, options: OverlayOptions) -> InputTracker: ...
+    def target_rect(self, target: CaptureTarget) -> Rect:
+        """Where the target is on screen NOW (a window may move while it is recorded)."""
 
 
 @cache

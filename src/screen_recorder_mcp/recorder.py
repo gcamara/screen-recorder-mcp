@@ -13,6 +13,7 @@ from screen_recorder_mcp.capture import AudioRecorder, FrameSource
 from screen_recorder_mcp.encoder import VideoEncoder
 from screen_recorder_mcp.frame_pacer import FramePacer, LatestFrameSlot
 from screen_recorder_mcp.geometry import Rect, clamp_crop, even_floor
+from screen_recorder_mcp.input_overlay import OverlayPipeline
 from screen_recorder_mcp.targets import CaptureTarget
 
 _log = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class RecordingParts:
     encoder: VideoEncoder
     audio: AudioRecorder | None
     muxer: Muxer
+    overlay: OverlayPipeline | None = None  # cursor halo / clicks / keys burned into frames
 
 
 class RecordingSession:
@@ -74,12 +76,16 @@ class RecordingSession:
                 "is the window minimized or closed?"
             )
         self._start_pipeline(self._first_frame_size())
+        if self._parts.overlay is not None:
+            self._parts.overlay.start()
 
     def stop(self) -> Path:
         self._stop_pacing.set()
         if self._pacer_thread is not None:
             self._pacer_thread.join(timeout=10)
         try:
+            if self._parts.overlay is not None:
+                self._parts.overlay.stop()
             self._parts.frame_source.stop()
         finally:
             # Always finalize ffmpeg: an unclosed stdin leaves an unplayable MP4
@@ -137,7 +143,11 @@ class RecordingSession:
         region = _region_in_frame_pixels(self.plan.region, self.plan.target.rect, *frame_size)
         crop, output_size = _output_geometry(region, *frame_size)
         self._parts.encoder.open(*output_size, self.plan.fps)
-        self._pacer = FramePacer(self._slot, self._parts.encoder.write, self.plan.fps, crop, output_size)
+        overlay = self._parts.overlay
+        decorate = None if overlay is None else overlay.bind(frame_size, crop, output_size)
+        self._pacer = FramePacer(
+            self._slot, self._parts.encoder.write, self.plan.fps, crop, output_size, decorate=decorate
+        )
         self.started_at = time.perf_counter()
         self._start_audio_or_abort()
         self._pacer_thread = threading.Thread(

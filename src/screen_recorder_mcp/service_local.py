@@ -182,8 +182,22 @@ class LocalRecorderService:
         self._library.delete(recording_id)
         self._emit(RecorderEventKind.HISTORY_CHANGED)
 
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo:
-        info = self._library.trim(recording_id, start_seconds, end_seconds)
+    def import_recording(self, path: Path, derived_from: str | None = None) -> RecordingInfo:
+        """Put a video made outside the recorder (a rendered manual) into the history."""
+        if not path.exists():
+            raise FileNotFoundError(f"{path} does not exist; expected a finished video")
+        source = next((i for i in self._library.entries(500) if i.recording_id == derived_from), None)
+        label = source.target_label if source else path.stem
+        started_by = source.started_by if source else "ai"
+        info = self._library.register(new_recording_id(), path, label, started_by, derived_from=derived_from)
+        self._emit(RecorderEventKind.HISTORY_CHANGED, info=info)
+        return info
+
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo:
+        info = self._library.trim(recording_id, start_seconds, end_seconds, crop, output_name, overwrite)
         self._emit(RecorderEventKind.HISTORY_CHANGED, info=info)
         return info
 
@@ -257,8 +271,9 @@ class LocalRecorderService:
         request = active.request
         try:
             active.plan = self._plan(active)
+            overlay = request.overlay or self._settings.get().overlay_options()
             active.session = self._session_builder(
-                self._backend, active.plan, request.audio, request.capture_cursor, request.capture
+                self._backend, active.plan, request.audio, request.capture_cursor, request.capture, overlay
             )
             active.session.on_target_closed = lambda: self._emit(RecorderEventKind.TARGET_CLOSED)
             active.session.start()

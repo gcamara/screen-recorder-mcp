@@ -77,6 +77,11 @@ It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
 - **Rectangle**: drag an area of the screen. This is a screen region, so whatever is on top of it is recorded too.
 - **Full screen**: click a monitor.
 
+**Input feedback** (**Mouse** and **Keys** on the selection toolbar, or Settings > Input feedback; Windows): a halo around the mouse pointer, a ripple on
+each click (blue left, orange right, a dot while held) and keystroke chips at the bottom (shortcuts only,
+or all keys including typed text). They are drawn into the video itself, so they also show up in
+window recordings. All off by default; "All keys" also shows passwords typed during the recording.
+
 Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While recording:
 
 - a border frames what is being recorded (it follows the window in Window mode);
@@ -85,13 +90,16 @@ Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While 
 
 When you stop, the recording is copied to the clipboard (turn this off in Settings) and opens in the
 player: trim the start and end, export a GIF, save, open the folder, or copy it again as video, GIF or
-file path (also on right-click in the history). **Recent** in the toolbar, and in the tray menu, lists
+file path (also on right-click in the history). **Trim / Crop** also puts a frame with handles around
+the picture: drag its corners or edges to crop (or draw a new rectangle), drag inside to move it, and
+**Reset crop** to undo. **Save...** asks for a new file name (pre-filled, Enter saves) or to overwrite
+the original, then opens the result in the player. **Recent** in the toolbar, and in the tray menu, lists
 the latest recordings; settings are under the gear.
 
 | | |
 |---|---|
 | ![Selection overlay](docs/screenshots/selection-rectangle.png) | ![Recording toolbar](docs/screenshots/recording-toolbar.png) |
-| ![Trim](docs/screenshots/trim-mode.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Trim and crop](docs/screenshots/trim-crop.png) | ![Settings](docs/screenshots/settings.png) |
 
 ### How the app and the MCP server fit together
 
@@ -163,14 +171,54 @@ records the whole window.
 |---|---|
 | `list_targets()` | Visible windows (front-most first) and monitors (`monitor:1`, `monitor:2`, ...) |
 | `pick_region(target)` | Opens the crop overlay over the target and returns the rectangle you drew (or `null`) |
-| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto")` | Starts recording |
+| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto", cursor_halo?, show_clicks?, show_keys?)` | Starts recording; the last three override the input-feedback settings |
 | `recording_status()` | Elapsed time, frames written, whether the target window was closed |
 | `pause_recording()` / `resume_recording()` | Pause and resume; the paused time is cut out |
 | `stop_recording()` | Finishes the file and returns its path and size |
 | `cancel_recording()` | Stops and deletes the partial file |
 | `list_recordings(limit?)` | Past recordings, newest first (made by you or by the AI) |
-| `trim_recording(recording_id, start_seconds, end_seconds)` | Saves a trimmed copy |
+| `trim_recording(recording_id, start_seconds, end_seconds, crop?, output_name?, overwrite=false)` | Saves a trimmed (and optionally cropped) copy, or overwrites the original |
 | `export_gif(recording_id, high_quality)` | Exports a GIF next to the video |
+| `contact_sheet(recording_id? \| path?, mode="changes", max_frames=12, columns=4, ...)` | One overview image: a grid of frames captioned with their times |
+| `sample_frames(recording_id? \| path?, mode="changes", max_frames=12, start_seconds?, end_seconds?, width=800, ...)` | Frames as inline images plus their times; full-size PNGs stay on disk |
+| `frame_at(seconds, recording_id? \| path?, crop?, width?)` | One frame, optionally cropped, to read small details |
+| `make_manual(steps, recording_id? \| path?, narrate=true, voice?, rate?, subtitles="burn", output_name?)` | A video manual: timed annotations and a voice-over rendered over a recording |
+| `list_voices(language?)` | Voices for `make_manual` |
+
+### Letting the AI drive the scene
+
+When the assistant clicks through a flow itself (browser automation, typing), it sets up the first
+screen before `start_recording`, and between steps calls `pause_recording`, prepares the next screen
+(navigates, loads data, closes pop-ups, waits for loading) and `resume_recording`. Paused time is cut
+out, so the video shows only the steps. For demos it turns on `cursor_halo` and `show_clicks`.
+
+`make_manual` then adds the explanation: per step, a narration (`say`, spoken with edge-tts, online)
+and annotations (text, arrow, box, ellipse, numbered badge, spotlight, blur). When the speech is
+longer than the step, the video holds the step's first frame until the voice ends (`hold="end"`
+holds its last frame), so nobody has to act slowly while recording. Subtitles stay inside the video
+file: `subtitles="burn"` (default) draws them into the picture so they show everywhere, browsers
+included; `"track"` adds a subtitle stream that desktop players can switch off. Install the voice-over with
+`uv sync --extra tts`.
+
+### Letting the AI watch a recording
+
+`contact_sheet`, `sample_frames` and `frame_at` hand frames to the model as images, so it can follow
+what moved on screen: animations, transitions, flicker, the order things appeared in. They work on
+the latest recording when neither `recording_id` nor `path` is given, including recordings you made
+by hand in the desktop app ("look at my last recording").
+
+`mode` picks which frames:
+
+- `"changes"` (default) drops frames identical to the last kept one, so idle time costs nothing;
+- `"scenes"` keeps only big changes (`scene_threshold`, 0..1, default 0.1);
+- `"interval"` keeps one frame every `interval_seconds`;
+- `"timestamps"` (`sample_frames` only) takes the exact `timestamps` you list.
+
+When more frames match than `max_frames`, they are thinned evenly and `found` reports how many
+matched; narrow `start_seconds`/`end_seconds` to look closer. Each image costs the model roughly
+`width × height / 750` tokens, so the intended flow is one contact sheet, then a few frames around
+the moment that matters. Frames are written to `<recording>-frames/<N>/` next to the video.
+
 
 `target` accepts a window title or part of it, an app name (`chrome`, `notepad.exe`, `Safari`), a
 `window_id` from `list_targets`, or `monitor:N`.

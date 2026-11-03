@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from screen_recorder_mcp.frame_sources import CaptureMode
+from screen_recorder_mcp.input_overlay import KeyMode
 from screen_recorder_mcp.json_file import read_json_object, write_json_atomic
 from screen_recorder_mcp.service import RecorderSettings, to_jsonable
 
@@ -46,6 +47,13 @@ def _as_capture_mode(key: str, value: object) -> CaptureMode:
         raise _bad(key, value, "one of auto, gpu, cpu") from None
 
 
+def _as_key_mode(key: str, value: object) -> KeyMode:
+    try:
+        return value if isinstance(value, KeyMode) else KeyMode(value)
+    except ValueError:
+        raise _bad(key, value, "one of off, shortcuts, all") from None
+
+
 def _as_hotkey(key: str, value: object) -> str:
     if not isinstance(value, str) or not _HOTKEY.match(value.strip().lower()):
         raise _bad(key, value, "keys joined by '+', e.g. 'ctrl+shift+r'")
@@ -69,6 +77,9 @@ _VALIDATORS: dict[str, Callable[[str, object], object]] = {
     "show_toolbar_for_ai_recordings": _as_bool,
     "hotkey": _as_hotkey,
     "theme": _as_theme,
+    "highlight_cursor": _as_bool,
+    "show_clicks": _as_bool,
+    "show_keys": _as_key_mode,
 }
 
 
