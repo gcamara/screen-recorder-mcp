@@ -56,8 +56,13 @@ class SelectionSession(QObject):
         indexes = geo.match_monitors([s.physical_size for s in screens], monitors)
         self._overlays = self._build_overlays(screens, indexes, monitors, targets, start_label)
         self._toolbar = None if constrain_to else SelectionToolbar(theme, mode)
-        self._toolbar_screen = screens[min(toolbar_screen, len(screens) - 1)].logical
+        toolbar_index = min(toolbar_screen, len(screens) - 1)
+        self._toolbar_screen = screens[toolbar_index].logical
         if self._toolbar:
+            # Both are top-most windows, so whichever was activated last wins: activating the overlay
+            # (on show, or on any click on the smoke) used to push the toolbar under it, dimmed and
+            # unclickable. An owned window always stays above its owner.
+            self._toolbar.setParent(self._overlays[toolbar_index], self._toolbar.windowFlags())
             self._toolbar.mode_selected.connect(self.set_mode)
             self._toolbar.closed.connect(self._cancel)
 
