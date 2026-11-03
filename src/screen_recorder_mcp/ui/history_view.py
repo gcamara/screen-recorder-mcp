@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (
 
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
 from screen_recorder_mcp.ui.clipboard_actions import ClipboardActions
+from screen_recorder_mcp.ui.icons import icon_pixmap
 from screen_recorder_mcp.ui.qt_bridge import BackgroundRunner
+from screen_recorder_mcp.ui.theme import DARK, Palette
 from screen_recorder_mcp.ui.theme_controller import ThemeController
 from screen_recorder_mcp.ui.thumbnails import ThumbnailMaker
 from screen_recorder_mcp.ui.view_models import HistoryRow, history_row_for
@@ -75,8 +77,9 @@ class HistoryView(QWidget):
         self._items: list[RecordingInfo] = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(role_label("HISTORY", "eyebrow"))
-        self._empty = role_label("No recordings yet. Press New to make one.", "muted")
+        layout.setSpacing(12)
+        layout.addWidget(role_label("History", "title"))  # same page header as Settings
+        self._empty = self._build_empty()
         self._list = QListWidget()
         self._list.setFrameShape(QListWidget.Shape.NoFrame)
         self._list.setSpacing(4)
@@ -84,8 +87,30 @@ class HistoryView(QWidget):
         self._list.itemClicked.connect(self._on_activated)
         self._list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._show_copy_menu)
-        layout.addWidget(self._empty)
+        # Both take the free space: with the list hidden the empty state sits in the middle of the page
+        # instead of the leftover height being shared out between the labels.
+        layout.addWidget(self._empty, 1)
         layout.addWidget(self._list, 1)
+
+    def _build_empty(self) -> QWidget:
+        empty = QWidget()
+        column = QVBoxLayout(empty)
+        column.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        column.setSpacing(8)
+        self._empty_glyph = QLabel()
+        self._empty_glyph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if self._theme is not None:
+            self._theme.changed.connect(self._retint_empty)
+        self._retint_empty(self._theme.palette if self._theme is not None else DARK)
+        title = role_label("No recordings yet", "title")
+        hint = role_label("Press New to make one; it will be listed here.", "muted")
+        for widget in (self._empty_glyph, title, hint):
+            widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            column.addWidget(widget)
+        return empty
+
+    def _retint_empty(self, palette: Palette) -> None:
+        self._empty_glyph.setPixmap(icon_pixmap("history", palette.text_muted, 40))
 
     def refresh(self, limit: int = 50) -> None:
         self._items = self._service.history(limit)
