@@ -230,13 +230,16 @@ class FakeSessionBuilder:
 
     def __init__(self, fail_start: bool = False) -> None:
         self.calls = 0
+        self.overlays: list[object] = []
         self.sessions: list[RecordingSession] = []
         self._fail_start = fail_start
 
     def __call__(
-        self, backend: object, plan: RecordingPlan, audio: AudioMode, cursor: bool, mode: object
+        self, backend: object, plan: RecordingPlan, audio: AudioMode, cursor: bool, mode: object,
+        overlay: object = None,
     ) -> RecordingSession:
         self.calls += 1
+        self.overlays.append(overlay)
         source: FakeFrameSource = (
             GpuOutOfMemoryFrameSource(None)
             if self._fail_start

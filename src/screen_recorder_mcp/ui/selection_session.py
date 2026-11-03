@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QGuiApplication
 
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import OverlayOptions
 from screen_recorder_mcp.service import TargetList
 from screen_recorder_mcp.ui import selection_geometry as geo
 from screen_recorder_mcp.ui.selection_overlay import MonitorOverlay
@@ -44,22 +45,24 @@ class SelectionSession(QObject):
 
     selected = Signal(object)  # SelectionResult
     cancelled = Signal()
+    overlay_changed = Signal(object)  # OverlayOptions, from the toolbar's Mouse / Keys
 
     def __init__(
         self, theme: ThemeController, targets: TargetList, screens: list[ScreenInfo],
         mode: CaptureTargetMode = CaptureTargetMode.RECTANGLE, constrain_to: Rect | None = None,
-        start_label: str = "Start", toolbar_screen: int = 0,
+        start_label: str = "Start", toolbar_screen: int = 0, overlay: OverlayOptions | None = None,
     ) -> None:
         super().__init__()
         self._theme, self._mode, self._constrain = theme, mode, constrain_to
         monitors = [Rect(**m["rect"]) for m in targets.monitors]  # type: ignore[arg-type]
         indexes = geo.match_monitors([s.physical_size for s in screens], monitors)
         self._overlays = self._build_overlays(screens, indexes, monitors, targets, start_label)
-        self._toolbar = None if constrain_to else SelectionToolbar(theme, mode)
+        self._toolbar = None if constrain_to else SelectionToolbar(theme, mode, overlay)
         self._toolbar_screen = screens[min(toolbar_screen, len(screens) - 1)].logical
         if self._toolbar:
             self._toolbar.mode_selected.connect(self.set_mode)
             self._toolbar.closed.connect(self._cancel)
+            self._toolbar.overlay_changed.connect(self.overlay_changed)
 
     def _build_overlays(
         self, screens: list[ScreenInfo], indexes: list[int | None], monitors: list[Rect],

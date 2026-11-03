@@ -77,6 +77,11 @@ It sits in the tray. **+ New** (or `Ctrl+Shift+R`) opens the selection overlay:
 - **Rectangle**: drag an area of the screen. This is a screen region, so whatever is on top of it is recorded too.
 - **Full screen**: click a monitor.
 
+**Input feedback** (**Mouse** and **Keys** on the selection toolbar, or Settings > Input feedback; Windows): a halo around the mouse pointer, a ripple on
+each click (blue left, orange right, a dot while held) and keystroke chips at the bottom (shortcuts only,
+or all keys including typed text). They are drawn into the video itself, so they also show up in
+window recordings. All off by default; "All keys" also shows passwords typed during the recording.
+
 Pick a delay (3, 5 or 10 s) in the toolbar if you need time to get ready. While recording:
 
 - a border frames what is being recorded (it follows the window in Window mode);
@@ -163,7 +168,7 @@ records the whole window.
 |---|---|
 | `list_targets()` | Visible windows (front-most first) and monitors (`monitor:1`, `monitor:2`, ...) |
 | `pick_region(target)` | Opens the crop overlay over the target and returns the rectangle you drew (or `null`) |
-| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto")` | Starts recording |
+| `start_recording(target, region?, fps=30, audio="none", capture_cursor=true, output_dir?, capture="auto", cursor_halo?, show_clicks?, show_keys?)` | Starts recording; the last three override the input-feedback settings |
 | `recording_status()` | Elapsed time, frames written, whether the target window was closed |
 | `pause_recording()` / `resume_recording()` | Pause and resume; the paused time is cut out |
 | `stop_recording()` | Finishes the file and returns its path and size |

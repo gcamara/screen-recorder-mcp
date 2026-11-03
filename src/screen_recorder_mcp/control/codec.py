@@ -9,6 +9,7 @@ from typing import Any, Literal, Mapping
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 from screen_recorder_mcp.service import (
     RecorderEvent,
     RecorderEventKind,
@@ -66,6 +67,18 @@ def request_from_json(raw: object) -> RecordingRequest:
         output_dir=_optional_path(body.get("output_dir")),
         started_by=_started_by(body.get("started_by")),
         delay_seconds=int(body.get("delay_seconds", 0)),
+        overlay=overlay_from_json(body.get("overlay")),
+    )
+
+
+def overlay_from_json(raw: object) -> OverlayOptions | None:
+    if raw is None:
+        return None
+    body = _require(raw, "overlay")
+    return OverlayOptions(
+        cursor_halo=bool(body.get("cursor_halo", False)),
+        show_clicks=bool(body.get("show_clicks", False)),
+        show_keys=KeyMode(body.get("show_keys", "off")),
     )
 
 
@@ -106,6 +119,7 @@ def settings_from_json(raw: object) -> RecorderSettings:
     body = dict(_require(raw, "settings"))
     body["output_dir"] = Path(str(body["output_dir"]))
     body["capture_mode"] = CaptureMode(body.get("capture_mode", "auto"))
+    body["show_keys"] = KeyMode(body.get("show_keys", "off"))
     return RecorderSettings(**body)
 
 
