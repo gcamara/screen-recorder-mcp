@@ -7,11 +7,17 @@ from typing import Protocol
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
+VIDEO_SUFFIXES = (".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v")
+
+from screen_recorder_mcp.ui.save_edit_dialog import SaveChoice, SaveEditDialog
+
 
 class Dialogs(Protocol):
     def save_path(self, suggested_name: str, start_dir: Path) -> Path | None: ...
     def choose_folder(self, start_dir: Path) -> Path | None: ...
     def confirm(self, title: str, text: str) -> bool: ...
+    def open_video(self, start_dir: Path) -> Path | None: ...
+    def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None: ...
 
 
 class QtDialogs:
@@ -34,3 +40,12 @@ class QtDialogs:
     def confirm(self, title: str, text: str) -> bool:
         answer = QMessageBox.question(self._parent, title, text)
         return answer == QMessageBox.StandardButton.Yes
+
+    def open_video(self, start_dir: Path) -> Path | None:
+        patterns = " ".join(f"*{suffix}" for suffix in VIDEO_SUFFIXES)
+        chosen, _ = QFileDialog.getOpenFileName(self._parent, "Open video", str(start_dir), f"Videos ({patterns})")
+        return Path(chosen) if chosen else None
+
+    def save_edit(self, source: Path, suggested_name: str, summary: str) -> SaveChoice | None:
+        dialog = SaveEditDialog(source, suggested_name, summary, self._parent)
+        return dialog.choice if dialog.exec() else None

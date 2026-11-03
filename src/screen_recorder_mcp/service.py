@@ -30,6 +30,7 @@ from typing import Callable, Literal, Protocol
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 
 StartedBy = Literal["user", "ai"]
 
@@ -60,6 +61,7 @@ class RecordingRequest:
     output_dir: Path | None = None
     started_by: StartedBy = "user"
     delay_seconds: int = 0
+    overlay: OverlayOptions | None = None  # cursor halo / clicks / keys; None = the app's settings
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,12 @@ class RecorderSettings:
     show_toolbar_for_ai_recordings: bool = True
     hotkey: str = "ctrl+shift+r"  # global "new recording" shortcut (cmd+shift+r on macOS)
     theme: Literal["system", "dark", "light"] = "system"
+    highlight_cursor: bool = False  # yellow halo around the pointer, burned into the video
+    show_clicks: bool = False  # ripple on each click, dot while a button is held
+    show_keys: KeyMode = KeyMode.OFF  # keystroke chips; ALL also shows typed text (passwords too)
+
+    def overlay_options(self) -> OverlayOptions:
+        return OverlayOptions(self.highlight_cursor, self.show_clicks, self.show_keys)
 
 
 @dataclass(frozen=True)
@@ -169,7 +177,11 @@ class RecorderService(Protocol):
     def status(self) -> RecordingStatus: ...
     def history(self, limit: int = 50) -> list[RecordingInfo]: ...
     def delete_recording(self, recording_id: str) -> None: ...
-    def trim(self, recording_id: str, start_seconds: float, end_seconds: float) -> RecordingInfo: ...
+    def import_recording(self, path: Path, derived_from: str | None = None) -> RecordingInfo: ...  # a file made outside, e.g. a manual
+    def trim(
+        self, recording_id: str, start_seconds: float, end_seconds: float, crop: Rect | None = None,
+        output_name: str | None = None, overwrite: bool = False,
+    ) -> RecordingInfo: ...  # crop: video pixels; output_name: new file next to it; overwrite: replace it
     def export_gif(
         self, recording_id: str, high_quality: bool, output: Path | None = None
     ) -> Path: ...

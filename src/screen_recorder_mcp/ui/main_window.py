@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QCloseEvent
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QStackedWidget, QToolButton, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QStackedWidget, QToolButton,
+    QVBoxLayout, QWidget,
 )
 
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
 from screen_recorder_mcp.ui.controller import RecordingController
-from screen_recorder_mcp.ui.dialogs import Dialogs
+from screen_recorder_mcp.ui.dialogs import VIDEO_SUFFIXES, Dialogs
 from screen_recorder_mcp.ui.history_view import HistoryView
 from screen_recorder_mcp.ui.icons import icon, icon_pixmap
 from screen_recorder_mcp.ui.playback_view import PlaybackView
@@ -58,6 +61,15 @@ class EmptyState(QWidget):
         self._glyph.setPixmap(icon_pixmap("film", palette.accent, 48))
 
 
+def video_files(urls: list[QUrl]) -> list[Path]:
+    """Local video files among dropped URLs, in order.
+
+    Example: video_files([QUrl.fromLocalFile("C:/v/a.mp4"), QUrl("https://x")]) -> [Path("C:/v/a.mp4")]
+    """
+    paths = [Path(url.toLocalFile()) for url in urls if url.isLocalFile()]
+    return [path for path in paths if path.suffix.lower() in VIDEO_SUFFIXES]
+
+
 class MainWindow(QMainWindow):
     """Example: MainWindow(service, controller, theme, runner, thumbs, dialogs).show()"""
 
@@ -72,7 +84,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Screen Recorder")
         self.resize(780, 640)
         self._service, self._controller, self._theme = service, controller, theme
+        self._runner, self._dialogs = runner, dialogs
         self._quitting = False
+        self.setAcceptDrops(True)  # drop a video file anywhere on the window to open it
         self._build(runner, thumbnails, dialogs)
         controller.recording_finished.connect(self.show_recording)
         controller.history_changed.connect(self._history.refresh)
@@ -99,7 +113,12 @@ class MainWindow(QMainWindow):
         self._history = HistoryView(self._service, thumbnails, runner, self._playback.clipboard, self._theme)
         self._settings = SettingsView(self._service, dialogs)
         self._settings.load()
-        for page in (self._home, self._history, self._settings):
+        settings_page = QScrollArea()  # the settings outgrow a small window; never cut a section off
+        settings_page.setWidget(self._settings)
+        settings_page.setWidgetResizable(True)
+        settings_page.setFrameShape(QFrame.Shape.NoFrame)
+        settings_page.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }")
+        for page in (self._home, self._history, settings_page):
             self._pages.addWidget(page)
         column.addWidget(self._pages, 1)
         self._toast = role_label("", "muted")
@@ -169,6 +188,12 @@ class MainWindow(QMainWindow):
     def _more_button(self) -> QToolButton:
         button = IconButton("dots", "More", self._theme, tint="text_muted")
         menu = QMenu(button)
+        open_video = QAction("Open video...", self)
+        open_video.setShortcut(QKeySequence.StandardKey.Open)  # Ctrl+O, also while the menu is closed
+        open_video.triggered.connect(self.choose_video)
+        self.addAction(open_video)
+        menu.addAction(open_video)
+        menu.addSeparator()
         for text, page in (("History", PAGE_HISTORY), ("Settings", PAGE_SETTINGS)):
             action = QAction(text, menu)
             action.triggered.connect(lambda _c=False, p=page: self.go_to(p))
@@ -205,6 +230,38 @@ class MainWindow(QMainWindow):
         self._playback.show_recording(info)
         self._home.setCurrentWidget(self._playback)
         self.go_to(PAGE_HOME)
+
+    def choose_video(self) -> None:
+        path = self._dialogs.open_video(self._service.get_settings().output_dir)
+        if path is not None:
+            self.open_video(path)
+
+    def open_video(self, path: Path) -> None:
+        """Show any video in the player: one from the history as is, another one is added to it first."""
+        known = next((info for info in self._service.history(500) if info.path == path), None)
+        if known is not None:
+            self.show_recording(known)
+            return
+        self.toast(f"Opening {path.name}...")
+        self._runner.submit(
+            lambda: self._service.import_recording(path),
+            on_result=lambda info: (self._history.refresh(), self.show_recording(info)),
+            on_error=lambda error: self.toast(f"Could not open {path.name}: {error}"),
+        )
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if video_files(event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if video_files(event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        files = video_files(event.mimeData().urls())
+        if files:
+            event.acceptProposedAction()
+            self.open_video(files[0])
 
     def _show_latest(self) -> None:
         latest = self._service.history(1)

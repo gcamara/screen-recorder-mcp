@@ -139,6 +139,7 @@ def build_request(
         target=target, region=region, fps=settings.default_fps, audio=audio,
         capture_cursor=settings.capture_cursor, capture=settings.capture_mode,
         output_dir=settings.output_dir, started_by="user", delay_seconds=delay,
+        overlay=settings.overlay_options(),
     )
 
 

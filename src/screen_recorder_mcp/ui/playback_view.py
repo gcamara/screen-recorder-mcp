@@ -6,6 +6,7 @@ from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QToolButton, QVBoxLayout, QWidget
 
+from screen_recorder_mcp.recording_library import suggested_edit_name
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
 from screen_recorder_mcp.ui.clipboard_actions import ClipboardActions
 from screen_recorder_mcp.ui.dialogs import Dialogs
@@ -92,25 +93,32 @@ class PlaybackView(QWidget):
         self._trim_bar = TrimBar(self._theme)
         self._trim_label = role_label("", "mono")
         buttons = QHBoxLayout()
-        cancel, save = QPushButton("Cancel"), QPushButton("Save trimmed copy")
+        cancel, save = QPushButton("Cancel"), QPushButton("Save...")
+        self._reset_crop = QPushButton("Reset crop")
+        self._reset_crop.setIcon(icon("crop", self._theme.palette.text_muted, 16))
+        self._reset_crop.hide()
         save.setProperty("role", "primary")
         cancel.clicked.connect(self.exit_trim)
         save.clicked.connect(self._save_trimmed)
+        self._reset_crop.clicked.connect(self._video.reset_crop)
         buttons.addWidget(self._trim_label)
         buttons.addStretch(1)
+        buttons.addWidget(self._reset_crop)
         buttons.addWidget(cancel)
         buttons.addWidget(save)
         column.addWidget(self._trim_bar)
         column.addLayout(buttons)
         self._trim_bar.trim_changed.connect(self._on_trim_changed)
         self._trim_bar.seek_requested.connect(lambda s: self._player.setPosition(int(s * 1000)))
+        self._video.crop_changed.connect(lambda crop: self._reset_crop.setVisible(crop is not None))
+        self._video.crop_changed.connect(lambda _crop: self._refresh_trim_label())
         self._trim_row.hide()
         return self._trim_row
 
     def _build_actions(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(8)
-        spec = [("scissors", "Trim", self.enter_trim), ("gif", "Export GIF", self._open_gif),
+        spec = [("scissors", "Trim / Crop", self.enter_trim), ("gif", "Export GIF", self._open_gif),
                 ("save", "Save as...", self._save_as), ("copy", "Copy", self._copy),
                 ("folder", "Open folder", self._open_folder)]
         self._action_buttons: list[QPushButton] = []
@@ -205,7 +213,8 @@ class PlaybackView(QWidget):
             return
         self._trim = TrimModel(duration=self._info.duration_seconds)
         self._trim_bar.set_model(self._trim)
-        self._on_trim_changed(self._trim.start, self._trim.end)
+        self._video.set_crop_editing(True, (self._info.width, self._info.height))
+        self._refresh_trim_label()
         for widget in self._transport_widgets:
             widget.hide()
         self._trim_row.show()
@@ -213,25 +222,51 @@ class PlaybackView(QWidget):
 
     def exit_trim(self) -> None:
         self._trim = None
+        self._video.set_crop_editing(False)
         self._trim_row.hide()
         for widget in self._transport_widgets:
             widget.show()
 
-    def _on_trim_changed(self, start: float, end: float) -> None:
+    def _on_trim_changed(self, _start: float, _end: float) -> None:
+        self._refresh_trim_label()
+
+    def _refresh_trim_label(self) -> None:
+        if self._trim is None:
+            return
+        start, end, crop = self._trim.start, self._trim.end, self._video.crop()
+        area = "drag the frame's corners to crop" if crop is None else f"crop {crop.width} x {crop.height}"
         self._trim_label.setText(
-            f"{format_clock_tenths(start)}  to  {format_clock_tenths(end)}   ({end - start:.1f} s kept)"
+            f"{format_clock_tenths(start)}  to  {format_clock_tenths(end)}   ({end - start:.1f} s kept)   ·   {area}"
         )
 
     def _save_trimmed(self) -> None:
         if self._info is None or self._trim is None:
             return
-        info, trim = self._info, self._trim
-        self._runner.submit(
-            lambda: self._service.trim(info.recording_id, trim.start, trim.end),
-            on_result=lambda new: self.message.emit(f"Saved trimmed copy ({format_clock(new.duration_seconds)})"),
-            on_error=lambda error: self.message.emit(f"Trim failed: {error}"),
-        )
+        info, trim, crop = self._info, self._trim, self._video.crop()
+        self._player.pause()
+        area = "" if crop is None else f", crop {crop.width} x {crop.height}"
+        summary = f"Keep {format_clock_tenths(trim.start)} to {format_clock_tenths(trim.end)}{area}"
+        choice = self._dialogs.save_edit(info.path, suggested_edit_name(info.path, crop is not None), summary)
+        if choice is None:
+            return  # stay in trim mode with the same handles and crop
+        if choice.overwrite:
+            self.stop_playback()  # Windows cannot replace a file the player still holds open
         self.exit_trim()
+        self._runner.submit(
+            lambda: self._service.trim(info.recording_id, trim.start, trim.end, crop, choice.output_name, choice.overwrite),
+            on_result=self._open_saved_edit,
+            on_error=lambda error: self._edit_failed(info, error),
+        )
+
+    def _open_saved_edit(self, new: RecordingInfo) -> None:
+        """Continue working on the result: it replaces the recording on screen."""
+        self.show_recording(new)
+        self.message.emit(f"Saved {new.path.name} ({format_clock(new.duration_seconds)})")
+
+    def _edit_failed(self, info: RecordingInfo, error: object) -> None:
+        if self._player.source().isEmpty():
+            self.show_recording(info)  # playback was released for an overwrite; bring the original back
+        self.message.emit(f"Trim failed: {error}")
 
     # --- actions -----------------------------------------------------------
     def _open_gif(self) -> None:

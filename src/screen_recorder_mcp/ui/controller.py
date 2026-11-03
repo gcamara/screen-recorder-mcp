@@ -5,11 +5,13 @@ Views never talk to the overlays; they call `begin_selection` and listen to the 
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Callable
 
 from PySide6.QtCore import QObject, QPoint, QTimer, Signal
 
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import OverlayOptions
 from screen_recorder_mcp.service import (
     RecorderEvent,
     RecorderEventKind,
@@ -98,10 +100,22 @@ class RecordingController(QObject):
     def _open_session(self, targets: object, mode: CaptureTargetMode, delay: int) -> None:
         screens = self._screens()
         cursor_screen = 0
-        self._session = SelectionSession(self._theme, targets, screens, mode, toolbar_screen=cursor_screen)  # type: ignore[arg-type]
+        self._session = SelectionSession(
+            self._theme, targets, screens, mode, toolbar_screen=cursor_screen,  # type: ignore[arg-type]
+            overlay=self._settings.overlay_options(),
+        )
+        self._session.overlay_changed.connect(self._remember_overlay)
         self._session.selected.connect(lambda result: self._on_selected(result, delay))
         self._session.cancelled.connect(self._drop_session)
         self._session.show()
+
+    def _remember_overlay(self, options: OverlayOptions) -> None:
+        """The toolbar's Mouse / Keys apply to this recording and become the new defaults."""
+        changes = {"highlight_cursor": options.cursor_halo, "show_clicks": options.show_clicks,
+                   "show_keys": options.show_keys}  # fmt: skip
+        self._settings = replace(self._settings, **changes)  # type: ignore[arg-type]
+        self._runner.submit(lambda: self._service.update_settings(changes),
+                            on_error=lambda e: self.error.emit(f"Could not save input feedback: {e}"))  # fmt: skip
 
     def _drop_session(self) -> None:
         self._session = None

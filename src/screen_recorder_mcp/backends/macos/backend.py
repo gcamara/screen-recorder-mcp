@@ -11,6 +11,7 @@ from screen_recorder_mcp.backends.macos.sck_frame_source import SckFrameSource
 from screen_recorder_mcp.capture import AudioMode, AudioRecorder, FrameSource
 from screen_recorder_mcp.frame_sources import CaptureMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import InputTracker, NullInputTracker, OverlayOptions
 from screen_recorder_mcp.targets import CaptureTarget
 
 
@@ -49,6 +50,12 @@ class MacBackend:
         # Window target → only its app's sound (pid); monitor → every app (pid 0).
         display_id = self._display_id(target) if target.monitor_index else self._main_display_id()
         return SckAudioRecorder(target.pid if target.window_id is not None else 0, display_id, output)
+
+    def input_tracker(self, options: OverlayOptions) -> InputTracker:
+        return NullInputTracker()  # no event tap yet: the overlay options are accepted but draw nothing
+
+    def target_rect(self, target: CaptureTarget) -> Rect:
+        return target.rect
 
     def _display_id(self, target: CaptureTarget) -> int:
         displays = quartz_windows.active_display_ids()

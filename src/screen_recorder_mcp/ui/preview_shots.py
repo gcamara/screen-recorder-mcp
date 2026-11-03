@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from screen_recorder_mcp.capture import AudioMode
 from screen_recorder_mcp.geometry import Rect
+from screen_recorder_mcp.input_overlay import KeyMode, OverlayOptions
 from screen_recorder_mcp.service import RecordingState, RecordingStatus, TargetList
 from screen_recorder_mcp.ui.demo_service import DemoRecorderService
 from screen_recorder_mcp.ui.gif_dialog import GifExportDialog
@@ -22,6 +23,8 @@ from screen_recorder_mcp.ui.theme_controller import ThemeController
 from screen_recorder_mcp.ui.view_models import CaptureTargetMode
 
 DESKTOP = Rect(0, 0, 1280, 720)
+# The demo writes to a temp folder under the developer's own profile; never publish that path.
+NEUTRAL_OUTPUT_DIR = r"C:\Users\you\Videos\screen-recorder-mcp"
 
 
 def pump(app: QApplication, seconds: float) -> None:
@@ -62,7 +65,8 @@ def selection_shot(theme: ThemeController, out: Path, mode: CaptureTargetMode) -
                   "rect": Rect(560, 200, 600, 400).as_dict()}],
         monitors=[{"target": "monitor:1", "rect": DESKTOP.as_dict()}],
     )
-    session = SelectionSession(theme, targets, [ScreenInfo(DESKTOP, 1.0)], mode)
+    feedback = OverlayOptions(cursor_halo=True, show_clicks=True, show_keys=KeyMode.SHORTCUTS)
+    session = SelectionSession(theme, targets, [ScreenInfo(DESKTOP, 1.0)], mode, overlay=feedback)
     session.show()
     overlay = session.overlays()[0]
     _prepare_overlay(overlay, mode)
@@ -158,6 +162,11 @@ def _trim_gif_pages(app: QApplication, shell: AppShell, out: Path) -> None:
     playback._trim_bar.update()  # noqa: SLF001
     pump(app, 0.4)
     save(window, out, "trim-mode")
+    info = playback.current()
+    if info is not None:
+        playback.video().set_crop(Rect(info.width // 5, info.height // 6, info.width // 2, info.height // 2))
+        pump(app, 0.3)
+        save(window, out, "trim-crop")
     playback.exit_trim()
     info = playback.current()
     dialog = GifExportDialog(shell._service, info, shell.theme, shell.runner, lambda _n: None)  # noqa: SLF001
@@ -166,6 +175,7 @@ def _trim_gif_pages(app: QApplication, shell: AppShell, out: Path) -> None:
     save(dialog, out, "gif-dialog")
     dialog.close()
     window.go_to(PAGE_SETTINGS)
+    window._settings._folder.setText(NEUTRAL_OUTPUT_DIR)  # noqa: SLF001 - dev tool: dress the form
     pump(app, 0.3)
     save(window, out, "settings")
     window.go_to(PAGE_HISTORY)

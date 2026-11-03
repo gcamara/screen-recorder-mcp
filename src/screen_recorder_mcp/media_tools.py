@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from screen_recorder_mcp.geometry import Rect
 from screen_recorder_mcp.proc import hidden_window_flags
 
 CommandRunner = Callable[[list[str]], "subprocess.CompletedProcess[bytes]"]
@@ -63,18 +64,24 @@ def parse_probe_json(raw: str, source: Path) -> MediaProbe:
 
 
 def build_trim_args(
-    ffmpeg: str, source: Path, start: float, end: float, output: Path, copy: bool
-) -> list[str]:
+    ffmpeg: str, source: Path, start: float, end: float, output: Path, copy: bool,
+    crop: Rect | None = None,
+) -> list[str]:  # fmt: skip
     """Cut [start, end] seconds; `copy` keeps the streams, otherwise re-encodes for exactness.
 
+    `crop` (video pixels, even size) also cuts the picture down to that rectangle; it needs a
+    re-encode, so it cannot be combined with `copy`.
     Example: build_trim_args("ffmpeg", Path("a.mp4"), 1, 3, Path("t.mp4"), True)[-1] -> "t.mp4"
     """
+    if copy and crop is not None:
+        raise ValueError("a cropped trim must re-encode; pass copy=False with crop")
     codec = ["-c", "copy"] if copy else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
                                          "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k"]  # fmt: skip
+    picture = [] if crop is None else ["-vf", f"crop={crop.width}:{crop.height}:{crop.x}:{crop.y}"]
     return [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
         "-ss", f"{start:.3f}", "-i", str(source), "-t", f"{end - start:.3f}",
-        *codec, "-movflags", "+faststart", str(output),
+        *picture, *codec, "-movflags", "+faststart", str(output),
     ]  # fmt: skip
 
 
@@ -124,11 +131,11 @@ class MediaTools:
             raise RuntimeError(f"ffprobe of {path} exited {result.returncode}: {_stderr(result)}")
         return parse_probe_json(result.stdout.decode(errors="replace"), path)
 
-    def trim(self, source: Path, start: float, end: float, output: Path) -> None:
-        """Stream copy from 0 s (keyframe-exact); anywhere else, or if the copy is off, re-encode."""
-        if start == 0.0 and self._try_copy(source, end, output):
+    def trim(self, source: Path, start: float, end: float, output: Path, crop: Rect | None = None) -> None:
+        """Stream copy from 0 s (keyframe-exact); anywhere else, if the copy is off, or when cropping, re-encode."""
+        if crop is None and start == 0.0 and self._try_copy(source, end, output):
             return
-        self._must_run(build_trim_args(self._ffmpeg, source, start, end, output, copy=False), output)
+        self._must_run(build_trim_args(self._ffmpeg, source, start, end, output, copy=False, crop=crop), output)
 
     def export_gif(self, source: Path, output: Path, high_quality: bool) -> None:
         with tempfile.TemporaryDirectory(prefix="srm-gif-") as scratch:

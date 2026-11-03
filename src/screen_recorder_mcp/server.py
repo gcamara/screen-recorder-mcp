@@ -27,12 +27,37 @@ Screen/app video recorder for Windows and macOS. Workflow you MUST follow:
 4. Audio: keep audio="none" unless the user explicitly asked for sound
    ("system" = on Windows everything the PC plays, on macOS only the recorded
    app's sound, or every app's for a monitor; "mic" = microphone).
-5. Control: pause_recording / resume_recording / cancel_recording (deletes the
+5. Input feedback (Windows): for demos, tutorials and manuals pass cursor_halo=true
+   and show_clicks=true so viewers see where the pointer is and what was clicked;
+   show_keys="shortcuts" adds key combos. show_keys="all" also shows typed text,
+   passwords included: only when the user asked. Unset = the app's settings.
+6. Control: pause_recording / resume_recording / cancel_recording (deletes the
    partial file) act on the running recording; stop_recording returns the MP4 path.
    Use delay_seconds on start_recording only when the user wants a countdown.
-6. After recording: list_recordings shows the history (also recordings the user
-   made by hand in the desktop app); trim_recording cuts a new file from one and
-   export_gif converts one to a GIF. Both keep the original.
+7. Recording a flow you drive yourself (browser automation, typing, clicking):
+   set up the first scene BEFORE start_recording. Between steps call
+   pause_recording, do what viewers should not see (navigate, load or reset data,
+   sign in, close pop-ups, wait for loading), then resume_recording. Paused time
+   is cut out, so the video shows only the steps, without waits or setup. Call
+   recording_status once after starting: elapsed_seconds should grow, and
+   target_closed=true means the window is gone.
+8. After recording: list_recordings shows the history (also recordings the user
+   made or opened in the desktop app). trim_recording cuts a time range and can
+   crop the picture (`crop` in video pixels; preview it with frame_at) into a new
+   file (`output_name`); overwrite=true replaces the original, only when the user
+   asked. export_gif converts one to a GIF next to it.
+9. Watching a recording (yours or one the user made by hand): contact_sheet first
+   (one cheap overview image with times), then sample_frames with
+   start_seconds/end_seconds around the interesting moment, and frame_at with crop
+   to read small details. Without recording_id/path they use the latest recording;
+   `path` takes any video file.
+10. Video manuals: record the flow (steps 5 and 7), find each step's moment and the
+   coordinates of what to point at with contact_sheet / frame_at, then make_manual
+   with steps (narration via "say", annotations: text, arrow, box, ellipse, badge,
+   spotlight, blur). Write "say" in the user's language; the default voice is
+   multilingual. No need to act slowly while recording: when the speech is longer
+   than a step, the video freezes that step's first frame until the voice ends.
+   Check the result with contact_sheet(path=<returned output>).
 When the desktop app is running, recordings you start appear in its toolbar so the
 user can always see, pause or stop them; otherwise recording runs inside this server.
 Window recordings only contain that app: windows moved in front of it are not
@@ -52,6 +77,11 @@ _TOOL_NAMES: tuple[str, ...] = (
     "list_recordings",
     "trim_recording",
     "export_gif",
+    "sample_frames",
+    "contact_sheet",
+    "frame_at",
+    "make_manual",
+    "list_voices",
 )
 
 

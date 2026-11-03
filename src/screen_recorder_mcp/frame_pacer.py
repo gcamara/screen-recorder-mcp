@@ -56,9 +56,11 @@ class FramePacer:
         output_size: tuple[int, int],
         clock: Clock = time.perf_counter,
         sleeper: Sleeper = time.sleep,
+        decorate: Callable[[FrameArray], FrameArray] | None = None,
     ) -> None:
         self._slot = slot
         self._emit = emit
+        self._decorate = decorate  # input overlay: drawn per tick, so ripples animate on a still screen
         self._fps = fps
         self._crop = crop
         self._width, self._height = output_size
@@ -107,7 +109,12 @@ class FramePacer:
         frame = self._slot.get()
         if frame is None:
             return
+        due = frames_due(elapsed_seconds, self._fps, self.frames_written)
+        if due == 0:
+            return
         shaped = fit_frame(crop_frame(frame, self._crop), self._width, self._height)
-        for _ in range(frames_due(elapsed_seconds, self._fps, self.frames_written)):
+        if self._decorate is not None:
+            shaped = self._decorate(shaped)
+        for _ in range(due):
             self._emit(shaped)
             self.frames_written += 1
