@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QUrl, Qt, Signal
+import time
+
+from PySide6.QtCore import QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSlider, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QToolButton, QVBoxLayout, QWidget
 
 from screen_recorder_mcp.service import RecorderService, RecordingInfo
 from screen_recorder_mcp.ui.clipboard_actions import ClipboardActions
@@ -14,11 +16,16 @@ from screen_recorder_mcp.ui.formatting import format_clock, format_clock_tenths
 from screen_recorder_mcp.ui.gif_dialog import GifExportDialog
 from screen_recorder_mcp.ui.icons import icon
 from screen_recorder_mcp.ui.qt_bridge import BackgroundRunner
+from screen_recorder_mcp.ui.seek_slider import SeekSlider
 from screen_recorder_mcp.ui.theme_controller import ThemeController
 from screen_recorder_mcp.ui.trim_bar import TrimBar
 from screen_recorder_mcp.ui.video_surface import VideoSurface
 from screen_recorder_mcp.ui.view_models import TrimModel
 from screen_recorder_mcp.ui.widgets_common import IconButton, role_label
+
+
+_SEEK_SETTLE_SECONDS = 1.0
+_SEEK_ARRIVED_MS = 400
 
 
 class PlaybackView(QWidget):
@@ -35,6 +42,7 @@ class PlaybackView(QWidget):
         self._service, self._theme, self._runner, self._dialogs = service, theme, runner, dialogs
         self._info: RecordingInfo | None = None
         self._trim: TrimModel | None = None
+        self._seeking_to: tuple[int, float] | None = None  # (target ms, give up at monotonic time)
         self.clipboard = ClipboardActions(service, runner, self)
         self.clipboard.message.connect(self.message)
         self._player = QMediaPlayer(self)
@@ -72,8 +80,7 @@ class PlaybackView(QWidget):
         row.setSpacing(8)
         self._play = IconButton("play", "Play / pause", self._theme)
         self._time = role_label("00:00 / 00:00", "mono")
-        self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setRange(0, 0)
+        self._slider = SeekSlider()
         self._mute = IconButton("volume", "Mute", self._theme, tint="text_muted")
         for widget in (self._play, self._time):
             row.addWidget(widget)
@@ -81,7 +88,7 @@ class PlaybackView(QWidget):
         row.addWidget(self._mute)
         self._play.clicked.connect(self.toggle_play)
         self._mute.clicked.connect(self._toggle_mute)
-        self._slider.sliderMoved.connect(self._player.setPosition)
+        self._slider.seek_requested.connect(self.seek)
         self._transport_widgets = [self._play, self._time, self._slider, self._mute]
         return row
 
@@ -103,7 +110,7 @@ class PlaybackView(QWidget):
         column.addWidget(self._trim_bar)
         column.addLayout(buttons)
         self._trim_bar.trim_changed.connect(self._on_trim_changed)
-        self._trim_bar.seek_requested.connect(lambda s: self._player.setPosition(int(s * 1000)))
+        self._trim_bar.seek_requested.connect(lambda s: self.seek(int(s * 1000)))
         self._trim_row.hide()
         return self._trim_row
 
@@ -142,7 +149,7 @@ class PlaybackView(QWidget):
 
     def _wire_player(self) -> None:
         self._player.positionChanged.connect(self._on_position)
-        self._player.durationChanged.connect(lambda ms: self._slider.setRange(0, ms))
+        self._player.durationChanged.connect(self._slider.set_duration)
         self._player.playbackStateChanged.connect(self._sync_play_icon)
 
     # --- showing a recording -----------------------------------------------
@@ -172,6 +179,15 @@ class PlaybackView(QWidget):
         playing = self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
         self._player.pause() if playing else self._player.play()
 
+    def seek(self, ms: int) -> None:
+        """Jump to `ms`, keeping the play / pause state; the slider shows the target until the player gets there."""
+        ms = max(0, min(ms, self._player.duration()))
+        if self._player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
+            self._player.pause()  # a stopped player (end of the video) draws no frame after a seek
+        self._seeking_to = (ms, time.monotonic() + _SEEK_SETTLE_SECONDS)
+        self._player.setPosition(ms)
+        self._refresh_time(ms)
+
     def _toggle_mute(self) -> None:
         muted = not self._audio.isMuted()
         self._audio.setMuted(muted)
@@ -182,12 +198,23 @@ class PlaybackView(QWidget):
         self._play.set_glyph("pause" if playing else "play")
 
     def _on_position(self, ms: int) -> None:
+        ms = self._position_after_seek(ms)
         if not self._slider.isSliderDown():
             self._slider.setValue(ms)
         self._refresh_time(ms)
         if self._trim is not None:
             self._trim_bar.set_playhead(ms / 1000)
             self._loop_inside_trim(ms)
+
+    def _position_after_seek(self, ms: int) -> int:
+        """Positions still in flight from before a seek would drag the slider back; show the target instead."""
+        if self._seeking_to is None:
+            return ms
+        target, deadline = self._seeking_to
+        if abs(ms - target) <= _SEEK_ARRIVED_MS or time.monotonic() > deadline:
+            self._seeking_to = None
+            return ms
+        return target
 
     def _loop_inside_trim(self, ms: int) -> None:
         assert self._trim is not None
